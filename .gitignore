@@ -3,3 +3,21 @@ iris-main.log
 .env
 .git
 
+# Node / frontend (three.js)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.cache/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/package-lock.json
+frontend/pnpm-lock.yaml
+frontend/yarn.lock
+
+# Logs
+logs/
+*.log
+
+Thumbs.db
+.idea/
