@@ -1,15 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Export generator="Cache" version="25">
-  <Document name="dc-sample.ZPM">
+  <Document name="dc-mu5k-3t.ZPM">
     <Module>
-      <Name>dc-sample</Name>
-      <Version>2.0.10</Version>
-      <Description>Basic InterSystems IRIS Development Template</Description>
+      <Name>dc-mu5k-3t</Name>
+      <Version>0.0.1</Version>
+      <Description>M‑USK‑3T is a browser-based programming game where you write code to control an autonomous rover on a distant exoplanet rich in valuable minerals.</Description>
       <Packaging>module</Packaging>
       <SourcesRoot>src</SourcesRoot>
-      <Resource Name="dc.sample.PKG"/>
-      <UnitTest Name="/tests" Package="dc.sample.unittests" Phase="test"/>
-
+      <Resource Name="dc.mu5k3t.PKG"/>
+      <WebApplication 
+        Name="/mu5k3t/api" 
+        NameSpace="{$namespace}"
+        Path="/src"
+        Recurse="1"
+        Directory="{$cspdir}/csp/mu5k3t/api" 
+        MatchRoles=":%All"
+        AutheEnabled="#{$$$AutheCache + $$$AutheUnauthenticated}"
+        DispatchClass="dc.mu5k3t.api.Dispatch" 
+        ServeFiles="1"
+        CookiePath="/csp/mu5k3t/api"
+        UseCookies="2"
+      />
+      <Invoke Class="dc.mu5k3t.Setup" Method="Init" >
+      </Invoke>
     </Module>
   </Document>
 </Export>
