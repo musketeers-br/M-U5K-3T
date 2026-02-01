@@ -21,6 +21,26 @@
         CookiePath="/csp/mu5k3t/api"
         UseCookies="2"
       />
+
+      <WebApplication 
+        Name="/m5k3t"
+        Url="/m5k3t"
+        NameSpace="${namespace}"
+        Description="M-U5K-3T Frontend"
+        Path="${cspdir}/csp/${namespace}"
+        
+        ServeFiles="2"
+        Recurse="1"
+        ServeFilesTimeout="3600"
+        
+        CookiePath="/m5k3t/"
+        UseSessionCookie="2"
+        DefaultTimeout="900"
+        
+        MatchRoles=":${globalsDbRole}"
+        AutheEnabled="#{$$$AutheUnauthenticated}"
+      />
+
       <Invoke Class="dc.mu5k3t.Setup" Method="Init" >
       </Invoke>
     </Module>

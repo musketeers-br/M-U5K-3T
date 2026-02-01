@@ -1,0 +1,24 @@
+zn "%SYS"
+
+// Cria a aplicação web /m5k3t
+Set props("AutheEnabled") = 64
+Set props("NameSpace") = "IRISAPP"
+Set props("Description") = "M-U5K-3T Frontend"
+Set props("Path") = "/usr/irissys/csp/IRISAPP"
+Set props("ServeFiles") = 2
+Set props("Recurse") = 1
+Set props("CookiePath") = "/m5k3t/"
+Set props("MatchRoles") = ":%DB_IRISAPP"
+Set props("IsNameSpaceDefault") = 0
+
+// Tenta criar, se já existir, apenas atualiza
+Set status = ##class(Security.Applications).Exists("/m5k3t")
+If status {
+    Do ##class(Security.Applications).Modify("/m5k3t", .props)
+    Write !, "✓ Aplicação /m5k3t atualizada"
+} Else {
+    Do ##class(Security.Applications).Create("/m5k3t", .props)
+    Write !, "✓ Aplicação /m5k3t criada"
+}
+
+halt
