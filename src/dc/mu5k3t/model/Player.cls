@@ -1,6 +1,51 @@
 Class dc.mu5k3t.model.Player Extends %RegisteredObject
 {
 
+ClassMethod Login(user As %String, Output gamer As %DynamicObject) As %Status
+{
+    Set tSC = $$$OK
+    Try {
+        Set player = ##class(dc.mu5k3t.storage.Player).UserIdxOpen(user)
+        
+        If $IsObject(player) {
+            $$$ThrowOnError(..ReturnSuccess(player, .gamer))
+            Return $$$OK
+        }
+        Set req = ##class(%Net.HttpRequest).%New()
+        Set req.Server = "community.intersystems.com"
+        Set req.SSLConfiguration = "ISC.FeatureTracker.SSL.Config" 
+        Set req.Https = 1
+        $$$ThrowOnError(req.Head("/user/"_user))
+
+        If (req.HttpResponse.StatusCode = 200) {
+            Set player = ##class(dc.mu5k3t.storage.Player).GetOrCreate(user)
+            $$$ThrowOnError(..ReturnSuccess(player, .gamer))
+            Return $$$OK
+        } 
+        Throw $$$ERROR(5002, "User '"_user_"' not found in InterSystems Developer Community.")
+    } Catch ex {
+        Set tSC=ex.AsStatus()
+    }
+    Return tSC
+}
+
+/// Helper para retornar o objeto JSON do jogador
+ClassMethod ReturnSuccess(player As dc.mu5k3t.storage.Player, Output output As %DynamicObject = "") As %Status
+{
+    Set tSC = $$$OK
+    Try {
+        Set output = {
+            "status": "success",
+            "username": (player.Username),
+            "profile": (player.CommunityURL),
+            "joinDate": (player.JoinDate)
+        }
+    } Catch ex {
+        Set tSC=ex.AsStatus()
+    }
+    Return tSC
+}
+
 ClassMethod Dashboard(user As %String, Output dashboard As %DynamicObject) As %Status
 {
     Set tSC = $$$OK
