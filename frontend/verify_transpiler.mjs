@@ -1,6 +1,6 @@
 import { Simulation } from './simulation.js';
 
-const sim = new Simulation();
+const sim = Simulation;
 
 const testCases = [
   {

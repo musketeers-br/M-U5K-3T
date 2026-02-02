@@ -415,58 +415,162 @@ export const MISSIONS = {
   }
 };
 
-export class Simulation {
-  constructor(gridSize = 25) {
-    this.gridSize = gridSize;
-    this.memory = {};
-    this.grid = [];
-  }
+export const Simulation = {
+  state: {
+    rover: null,
+    mapData: null,
+    scene: null,
+    updateHUD: null,
+    running: false,
+    fuel: 100,
+    health: 100,
+    interval: null,
+    gridSize: 25,
+    memory: {},
+    grid: [],
+    missionId: 'M1'
+  },
+
+  init(mapData, roverMesh, scene, onHudUpdate) {
+    console.log("⚙️ Simulation Engine: Initializing...");
+
+    // 1. Store References
+    this.state.mapData = mapData;
+    this.state.rover = roverMesh;
+    this.state.scene = scene;
+    this.state.updateHUD = onHudUpdate;
+
+    // 2. Reset Metrics
+    this.state.fuel = 100;
+    this.state.health = 100;
+    this.state.running = false;
+    this.state.memory = {};
+
+    // 3. Reset Physics/Visuals
+    if (this.state.rover) {
+      // Assuming starting at 0,0 for M1. 
+      // Future: Use mapData.baseStation.x/z if available
+      this.state.rover.position.set(0, 0, 0);
+      this.state.rover.rotation.set(0, 0, 0);
+    }
+
+    // 4. Initial HUD Update
+    if (this.state.updateHUD) {
+      this.state.updateHUD({
+        fuel: this.state.fuel,
+        health: this.state.health,
+        status: "READY"
+      });
+    }
+
+    // Initialize grid from mapData if available
+    if (mapData) {
+      this.loadMap(mapData);
+    }
+  },
+
+  stop() {
+    this.state.running = false;
+    if (this.state.interval) clearInterval(this.state.interval);
+    console.log("🛑 Simulation Stopped");
+  },
+
+  async runCode() {
+    if (!this.state.rover) {
+      alert("Rover not initialized!");
+      return;
+    }
+
+    console.log("⚡ Executing Auto-Pilot Sequence...");
+    this.state.running = true;
+
+    // HARDCODED DEMO SEQUENCE (Bypasses Transpiler for now)
+    const commands = ['MOVE', 'MOVE', 'TURN_LEFT', 'MOVE', 'MOVE', 'COLLECT'];
+    let step = 0;
+
+    this.state.interval = setInterval(() => {
+      if (!this.state.running || step >= commands.length) {
+        this.stop();
+        return;
+      }
+
+      const cmd = commands[step];
+      console.log(`🤖 Rover Action: ${cmd}`);
+
+      // PHYSICS & VISUALS (Mock)
+      if (cmd === 'MOVE') {
+        this.state.rover.translateZ(1.2); // Move 1.2 units forward (TILE_SIZE)
+        this.state.fuel -= 5;
+      }
+      else if (cmd === 'TURN_LEFT') {
+        this.state.rover.rotateY(Math.PI / 2);
+      }
+      else if (cmd === 'TURN_RIGHT') {
+        this.state.rover.rotateY(-Math.PI / 2);
+      }
+      else if (cmd === 'COLLECT') {
+        // Visual feedback only for now
+        console.log("✨ Scanning for minerals...");
+      }
+
+      // HUD UPDATE
+      if (this.state.updateHUD) {
+        this.state.updateHUD({
+          fuel: this.state.fuel,
+          health: this.state.health,
+          status: `EXEC: ${cmd}`
+        });
+      }
+
+      step++;
+    }, 800); // 800ms per step
+  },
 
   generateMap() {
-    this.grid = [];
-    for (let x = 0; x < this.gridSize; x++) {
-      this.grid[x] = [];
-      for (let z = 0; z < this.gridSize; z++) {
+    this.state.grid = [];
+    for (let x = 0; x < this.state.gridSize; x++) {
+      this.state.grid[x] = [];
+      for (let z = 0; z < this.state.gridSize; z++) {
         if (x === 0 && z === 0) {
-          this.grid[x][z] = 'CLEAR';
+          this.state.grid[x][z] = 'CLEAR';
           continue;
         }
 
         const rand = Math.random();
         if (rand < 0.15) {
-          this.grid[x][z] = 'OBSTACLE';
+          this.state.grid[x][z] = 'OBSTACLE';
         } else if (rand < 0.25) {
-          this.grid[x][z] = 'MINERAL';
+          this.state.grid[x][z] = 'MINERAL';
         } else {
-          this.grid[x][z] = 'CLEAR';
+          this.state.grid[x][z] = 'CLEAR';
         }
       }
     }
-    return this.grid;
-  }
+    return this.state.grid;
+  },
 
   loadMap(data) {
-    if (!data) return this.grid;
+    if (!data) return this.state.grid;
 
     // Support { grid, hazards } format or raw array
     const gridData = data.grid || data;
     const hazards = data.hazards || [];
 
     if (Array.isArray(gridData)) {
-      this.grid = gridData;
-      this.gridSize = gridData.length;
+      this.state.grid = gridData;
+      this.state.gridSize = gridData.length;
 
       // Apply hazards to grid
       hazards.forEach(h => {
-        if (this.grid[h.x] && this.grid[h.x][h.z] === 'CLEAR') {
-          this.grid[h.x][h.z] = 'HAZARD';
+        if (this.state.grid[h.x] && this.state.grid[h.x][h.z] === 'CLEAR') {
+          this.state.grid[h.x][h.z] = 'HAZARD';
         }
       });
     }
-    return this.grid;
-  }
+    return this.state.grid;
+  },
 
-  static async fetchMapData(missionId, mode) {
+  async fetchMapData(missionId, mode) {
     const safeMode = mode.toLowerCase() === 'deploy' ? 'DEPLOY' : 'SIMULATION';
     const url = `${API_BASE_URL}/map/${missionId}/${safeMode}`;
 
@@ -489,7 +593,7 @@ export class Simulation {
       console.error("[Sim] Map Load Error:", e);
       throw e;
     }
-  }
+  },
 
   transpileCOS(cosCode) {
     console.log("Input COS:", cosCode);
@@ -505,7 +609,7 @@ export class Simulation {
 
     console.log("Transpiled JS:", jsCode);
     return jsCode;
-  }
+  },
 
   runMission(userCode, startX = 0, startZ = 0, externalHistory = null) {
     if (externalHistory && Array.isArray(externalHistory)) {
@@ -513,9 +617,9 @@ export class Simulation {
       return { history: externalHistory, error: null };
     }
 
-    if (this.grid.length === 0) this.generateMap();
+    if (this.state.grid.length === 0) this.generateMap();
 
-    const activeMission = MISSIONS[this.missionId] || MISSIONS['M1'];
+    const activeMission = MISSIONS[this.state.missionId] || MISSIONS['M1'];
     let fuel = 100;
     let score = 0;
     let hp = 100;
@@ -534,7 +638,7 @@ export class Simulation {
     let currentX = startX;
     let currentZ = startZ;
 
-    if (!this.memory.direction) this.memory.direction = 'north';
+    if (!this.state.memory.direction) this.state.memory.direction = 'north';
 
     const MAX_SAFETY_TICKS = 2000;
     let tick = 1;
@@ -544,7 +648,7 @@ export class Simulation {
 
       // 1. Prepare Context & Prepare Sensors for Visualization
       const scanResult = this.scan(currentX, currentZ);
-      const currentDir = this.memory.direction || 'north';
+      const currentDir = this.state.memory.direction || 'north';
       let dirX = 0, dirZ = 0;
       if (currentDir === 'north') dirZ = -1;
       else if (currentDir === 'south') dirZ = 1;
@@ -583,7 +687,7 @@ export class Simulation {
           x: currentX,
           z: currentZ
         },
-        memory: this.memory,
+        memory: this.state.memory,
         output: { action: "WAIT", param: "" }
       };
 
@@ -623,14 +727,14 @@ export class Simulation {
             fuel -= 1;
             tickActions.push({ type: 'MOVE', x: currentX, z: currentZ, direction: d });
 
-            if (this.grid[currentX][currentZ] === 'MINERAL') {
+            if (this.state.grid[currentX][currentZ] === 'MINERAL') {
               score += 50;
-              this.grid[currentX][currentZ] = 'CLEAR';
+              this.state.grid[currentX][currentZ] = 'CLEAR';
               tickActions.push({ type: 'COLLECT', x: currentX, z: currentZ, score: score });
             }
           } else {
             // Collision or Blocked
-            const isOOB = !(nextX >= 0 && nextX < this.gridSize && nextZ >= 0 && nextZ < this.gridSize);
+            const isOOB = !(nextX >= 0 && nextX < this.state.gridSize && nextZ >= 0 && nextZ < this.state.gridSize);
             if (isOOB) {
               tickActions.push({ type: 'BLOCKED', x: currentX, z: currentZ, direction: d, reason: 'boundary' });
             } else {
@@ -642,7 +746,7 @@ export class Simulation {
           }
 
           // Check for Hazard effect after movement
-          if (this.grid[currentX][currentZ] === 'HAZARD') {
+          if (this.state.grid[currentX][currentZ] === 'HAZARD') {
             fuel -= 4; // Total cost 5 (1 baseline + 4 penalty)
             hp -= 2;
             tickActions.push({ type: 'HAZARD_EFFECT', x: currentX, z: currentZ, currentHP: hp, currentFuel: fuel });
@@ -661,7 +765,7 @@ export class Simulation {
         }
       } else if (action === "TURN") {
         if (param) {
-          this.memory.direction = param.toLowerCase();
+          this.state.memory.direction = param.toLowerCase();
           tickActions.push({ type: 'TURN', param: param });
         }
       } else if (action === "SAY") {
@@ -721,21 +825,21 @@ export class Simulation {
     }
 
     return { history, error: null };
-  }
+  },
 
   isValid(x, z) {
-    return x >= 0 && x < this.gridSize && z >= 0 && z < this.gridSize && this.grid[x][z] !== 'OBSTACLE';
-  }
+    return x >= 0 && x < this.state.gridSize && z >= 0 && z < this.state.gridSize && this.state.grid[x][z] !== 'OBSTACLE';
+  },
 
   scan(x, z) {
     const get = (gx, gz) => {
       if (!this.isValid(gx, gz)) return 'OBSTACLE';
-      return this.grid[gx][gz];
+      return this.state.grid[gx][gz];
     };
 
     // Extended Sensors Mk.3
     // Relies on memory.direction to compute directional sensors
-    const dir = this.memory.direction || 'north'; // Default
+    const dir = this.state.memory.direction || 'north'; // Default
 
     let fx = x, fz = z;      // front (1 tile)
     let ffx = x, ffz = z;    // front_far (2 tiles)
@@ -771,13 +875,13 @@ export class Simulation {
       left: get(lx, lz),
       right: get(rx, rz)
     };
-  }
+  },
 
   // --- Test Suite for Transpiler ---
-  static runTests() {
+  runTests() {
     console.log('\n🧪 RUNNING TRANSPILER TEST SUITE 🧪\n');
 
-    const sim = new Simulation();
+    const sim = Simulation;
     let passCount = 0;
     let failCount = 0;
 

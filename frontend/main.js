@@ -2,11 +2,12 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Simulation } from './simulation.js';
 
+// --- VERSÃO DE DEBUG ---
+console.log("🔹 FRONTEND BUILD: v3.3 - " + new Date().toISOString());
+console.log("🔹 API TARGET: /mu5k3t/api");
+
 // --- CONFIGURAÇÃO GLOBAL ---
 const API_BASE_URL = "/mu5k3t/api";
-// --- VERSÃO DE DEBUG ---
-console.log("🔹 FRONTEND BUILD: v3.0 - " + new Date().toISOString());
-console.log("🔹 API TARGET: /mu5k3t/api");
 
 const CONFIG = {
   colors: {
@@ -125,69 +126,107 @@ async function initEnvironment(mode, missionId) {
     loader.setPath('assets/'); // Crucial para texturas funcionarem no CSP
 
     // 4. Buscar Dados do Mapa + Assets 3D em Paralelo
-    // NOTA: Removemos a árvore quebrada da lista
-    const [mapData, terrain, roverModel, landerModel] = await Promise.all([
+    const [mapData, roverModel, landerModel] = await Promise.all([
       fetchMapData(missionId, mode),
-      loader.loadAsync('terrain_low.gltf'),
-      loader.loadAsync('spacetruck.gltf'),
+      loader.loadAsync('dropship.gltf'),
       loader.loadAsync('lander_base.gltf')
     ]);
 
-    // 5. Configurar Terreno
-    const terrainMesh = terrain.scene;
-    terrainMesh.position.set(12, -0.5, 12);
-    terrainMesh.scale.set(1.5, 1, 1.5);
-    scene.add(terrainMesh);
+    // Calculate Dynamic Grid Scale
+    const TILE_SIZE = 1.2;
+    const gridSize = mapData.gridSize || 25;
+    const worldSize = gridSize * TILE_SIZE;
+
+    // 5. DANGER ROOM GRID (Dynamic Size)
+    const gridHelper = new THREE.GridHelper(worldSize, gridSize, 0xff00ff, 0x2b0057);
+    gridHelper.position.y = 0;
+    scene.add(gridHelper);
+
+    // Dark Floor underneath
+    const planeGeo = new THREE.PlaneGeometry(worldSize, worldSize);
+    const planeMat = new THREE.MeshBasicMaterial({ color: 0x0d001a, side: THREE.DoubleSide });
+    const floor = new THREE.Mesh(planeGeo, planeMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -0.01; // Slightly below grid
+    scene.add(floor);
+
+    // Dynamic Camera Distance
+    const camDist = Math.max(20, gridSize * 0.8);
+    camera.position.set(camDist, camDist, camDist);
+    camera.lookAt(0, 0, 0);
 
     // 6. Configurar Base Station
     const landerMesh = landerModel.scene;
-    landerMesh.position.set(0, 0, 0);
+    landerMesh.scale.set(3.5, 3.5, 3.5); // BIGGER
+    landerMesh.position.set(0, 0, 0);    // ON GROUND
     scene.add(landerMesh);
 
-    // 7. Configurar Rover
+    // 7. Configurar Rover (Now Dropship)
     const roverMesh = roverModel.scene;
+    roverMesh.scale.set(0.8, 0.8, 0.8); // Fit in 1.2 tile
+    roverMesh.position.set(0, 0.2, 0);   // Slight hover
     roverMesh.userData = { type: 'ROVER' };
     scene.add(roverMesh);
     gameState.rover = roverMesh; // Salva ref para o simulador
 
-    // 8. Popular Obstáculos (Map Data)
+    // 8. OBSTACLES (Full Tile Blocks)
     if (mapData.obstacles) {
-      // Geometria Fallback caso não tenhamos modelo de pedra
-      const geo = new THREE.DodecahedronGeometry(0.4);
-      const mat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.8 });
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x505050,
+        roughness: 0.2,
+        metalness: 0.8
+      });
 
       mapData.obstacles.forEach(obs => {
-        const rock = new THREE.Mesh(geo, mat);
-        rock.position.set(obs.x, 0.4, obs.z);
-        rock.userData = { type: 'OBSTACLE' };
-        scene.add(rock);
+        const block = new THREE.Mesh(geo, mat);
+        // Center on tile (assuming integer coords map to world units)
+        block.position.set(obs.x, 0.5, obs.z);
+        block.userData = { type: 'OBSTACLE' };
+
+        // Add Neon Edges for style
+        const edges = new THREE.EdgesGeometry(geo);
+        const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xff00ff }));
+        block.add(line);
+
+        scene.add(block);
       });
     }
 
-    // 9. Popular Minerais (Map Data)
+    // 9. MINERALS (Large Floating Crystals)
     if (mapData.minerals) {
-      const geo = new THREE.OctahedronGeometry(0.3);
-      const mat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.8, emissive: 0xaa4400 });
+      const geo = new THREE.OctahedronGeometry(0.5); // Diameter 1.0
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xffd700,
+        emissive: 0xaa4400,
+        emissiveIntensity: 0.5,
+        metalness: 1.0
+      });
 
       mapData.minerals.forEach(min => {
         const crystal = new THREE.Mesh(geo, mat);
-        crystal.position.set(min.x, 0.5, min.z);
+        crystal.position.set(min.x, 0.6, min.z); // Slightly floating
         crystal.userData = { type: 'MINERAL', value: min.value };
         scene.add(crystal);
       });
     }
 
-    // Inicializa sistema de simulação
-    Simulation.init(mapData, roverMesh, scene, updateHUD);
+    // 10. Inicializa o Cérebro do Simulador
+    // Importante: Simulation.js precisa ter o método init() implementado
+    if (Simulation.init) {
+      Simulation.init(mapData, roverMesh, scene, updateHUD);
+    } else {
+      console.error("⚠ Simulation.init missing! Check simulation.js");
+    }
 
     // Troca para visão do jogo
     switchView('game-view');
 
   } catch (error) {
-    console.error("❌ CRITICAL INIT ERROR:", error);
+    console.error("CRITICAL INIT ERROR:", error);
     alert("Simulation Failed: " + error.message);
   } finally {
-    // 10. ESCONDER LOADER (Sempre executa, mesmo com erro)
+    // 11. ESCONDER LOADER (Sempre executa, mesmo com erro)
     if (loaderElement) loaderElement.classList.add('hidden');
   }
 }
@@ -218,8 +257,6 @@ const switchView = (viewId) => {
 };
 
 const updateHUD = (data) => {
-  // Atualiza interface durante o jogo (Score, Fuel, etc)
-  // Implementação simples para evitar ReferenceError se elementos faltarem
   try {
     const fuelEl = document.getElementById('fuel-display');
     if (fuelEl) fuelEl.innerText = Math.floor(data.fuel || 100) + '%';
@@ -244,14 +281,14 @@ const renderDashboard = async () => {
 
       let actionsHtml = '';
       if (mission.status === 'LOCKED') {
-        actionsHtml = `<button class="btn gray" disabled>🔒 LOCKED</button>`;
+        actionsHtml = `<button class="btn gray" disabled><span class="status-dot red"></span>LOCKED</button>`;
       } else if (mission.status === 'OPEN') {
-        actionsHtml = `<button class="btn blue" onclick="window.loadMission('${mission.id}', 'SIMULATION')">🟢 START MISSION</button>`;
+        actionsHtml = `<button class="btn blue" onclick="window.loadMission('${mission.id}', 'SIMULATION')"><span class="status-dot green"></span>START MISSION</button>`;
       } else if (mission.status === 'COMPLETED') {
         actionsHtml = `
                     <div class="mission-stats">
-                        <span>🏆 BEST: ${mission.highScore}</span>
-                        <span># RANK: ${mission.rank}</span>
+                        <span>BEST SCORE: ${mission.highScore}</span>
+                        <span>RANK: ${mission.rank}</span>
                     </div>
                     <div class="btn-group">
                         <button class="btn orange small" onclick="window.loadMission('${mission.id}', 'DEPLOY')">WATCH ORBIT</button>
@@ -270,7 +307,7 @@ const renderDashboard = async () => {
 
   } catch (e) {
     console.error("Dashboard Error:", e);
-    missionList.innerHTML = `<div class="error-msg">⚠ UPLINK FAILED<br>${e.message}</div>`;
+    missionList.innerHTML = `<div class="error-msg">(!) UPLINK FAILED<br>${e.message}</div>`;
   }
 };
 
@@ -296,13 +333,185 @@ const handleLogin = async () => {
     localStorage.setItem('musk_username', data.username);
     gameState.user = data.username;
 
-    switchView('mission-hub');
-    renderDashboard();
+    // --- LOGIC: ONBOARDING CHECK ---
+    const skip = localStorage.getItem('musk_skip_tutorial');
+
+    if (skip === 'true') {
+      console.log("⏩ Skipping Tutorial (User Preference)");
+      switchView('mission-hub');
+      renderDashboard();
+    } else {
+      console.log("📖 Showing Onboarding...");
+      switchView('tutorial-view');
+      // Inicializa UI do tutorial
+      if (typeof updateTutorialUI === 'function') updateTutorialUI();
+    }
 
   } catch (error) {
     if (landingStatus) landingStatus.innerText = `Error: ${error.message}`;
   }
 };
+
+// ==========================================
+// 📖 LÓGICA DO TUTORIAL (Carrossel Terminal)
+// ==========================================
+const tutorialSlidesData = document.querySelectorAll('#tutorial-slides-data .tutorial-step');
+const tutorialConsole = document.getElementById('typewriter-target');
+const nextBtn = document.getElementById('tutorial-next-btn');
+const prevBtn = document.getElementById('tutorial-prev-btn');
+const finishBtnContainer = document.getElementById('enter-control-btn');
+const skipCheck = document.getElementById('skip-tutorial-check');
+
+let currentStep = 0;
+let isTyping = false;
+let typeTimeout = null;
+
+/**
+ * Efeito de máquina de escrever retrô
+ */
+const typeWriter = (element, html, speed = 15) => {
+  return new Promise((resolve) => {
+    isTyping = true;
+    element.innerHTML = '';
+
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    const nodes = Array.from(tempDiv.childNodes);
+
+    let nodeIndex = 0;
+
+    const typeNode = () => {
+      if (nodeIndex >= nodes.length) {
+        if (!element.querySelector('.cursor')) {
+          element.innerHTML += '<span class="cursor"></span>';
+        }
+        isTyping = false;
+        resolve();
+        return;
+      }
+
+      const node = nodes[nodeIndex];
+      // REMOVED: replace('<span class="cursor"></span>', '') - simplified cursor management
+
+      const playSound = () => {
+        // [PLACEHOLDER] keystroke sound
+        // console.log("🔊 TICK"); 
+      };
+
+      if (node.nodeType === Node.TEXT_NODE) {
+        let charIndex = 0;
+        const text = node.textContent;
+        const typeChar = () => {
+          if (charIndex < text.length) {
+            const cursor = element.querySelector('.cursor');
+            if (cursor) cursor.remove();
+
+            element.innerHTML += text[charIndex] + '<span class="cursor"></span>';
+            charIndex++;
+            playSound();
+            typeTimeout = setTimeout(typeChar, speed);
+          } else {
+            nodeIndex++;
+            typeNode();
+          }
+        };
+        typeChar();
+      } else {
+        const wrapper = node.cloneNode(false);
+        const cursor = element.querySelector('.cursor');
+        if (cursor) cursor.remove();
+
+        element.appendChild(wrapper);
+        wrapper.innerHTML += '<span class="cursor"></span>';
+
+        const innerText = node.textContent;
+        let charIndex = 0;
+        const typeInnerChar = () => {
+          if (charIndex < innerText.length) {
+            const innerCursor = wrapper.querySelector('.cursor');
+            if (innerCursor) innerCursor.remove();
+
+            wrapper.textContent += innerText[charIndex];
+            wrapper.innerHTML += '<span class="cursor"></span>';
+            charIndex++;
+            playSound();
+            typeTimeout = setTimeout(typeInnerChar, speed);
+          } else {
+            nodeIndex++;
+            typeNode();
+          }
+        };
+        typeInnerChar();
+      }
+    };
+
+    typeNode();
+  });
+};
+
+const updateTutorialUI = async () => {
+  if (!tutorialSlidesData.length || !tutorialConsole) return;
+
+  // Cancela digitação anterior se houver
+  if (typeTimeout) clearTimeout(typeTimeout);
+
+  const stepData = tutorialSlidesData[currentStep];
+  const htmlContent = stepData.innerHTML;
+
+  // 1. Inicia Digitação
+  await typeWriter(tutorialConsole, htmlContent);
+
+  // 2. Atualiza Botões (somente após terminar de digitar ou durante se quiser permitir pular)
+  if (prevBtn) prevBtn.disabled = (currentStep === 0);
+
+  if (currentStep === tutorialSlidesData.length - 1) {
+    if (nextBtn) nextBtn.style.display = 'none';
+    if (finishBtnContainer) {
+      finishBtnContainer.classList.remove('hidden');
+      finishBtnContainer.style.display = 'inline-block';
+    }
+  } else {
+    if (nextBtn) nextBtn.style.display = 'inline-block';
+    if (finishBtnContainer) {
+      finishBtnContainer.classList.add('hidden');
+      finishBtnContainer.style.display = 'none';
+    }
+  }
+};
+
+if (nextBtn && prevBtn) {
+  nextBtn.onclick = () => {
+    if (isTyping) return; // Opcional: permitir pular?
+    if (currentStep < tutorialSlidesData.length - 1) {
+      currentStep++;
+      updateTutorialUI();
+    }
+  };
+
+  prevBtn.onclick = () => {
+    if (isTyping) return;
+    if (currentStep > 0) {
+      currentStep--;
+      updateTutorialUI();
+    }
+  };
+}
+
+// Botão FINAL "Initialize Control Link"
+if (finishBtnContainer) {
+  finishBtnContainer.onclick = () => {
+    // Salva preferência
+    if (skipCheck && skipCheck.checked) {
+      localStorage.setItem('musk_skip_tutorial', 'true');
+    } else {
+      localStorage.removeItem('musk_skip_tutorial');
+    }
+    // Vai para o jogo
+    switchView('mission-hub');
+    renderDashboard();
+  };
+}
+
 
 // ==========================================
 // 🔌 EVENT LISTENERS
@@ -335,38 +544,36 @@ function animate() {
 
   renderer.render(scene, camera);
 }
+
+
+// ==========================================
+// 🏁 INICIALIZAÇÃO E KILL SWITCH
+// ==========================================
+
+// Inicia o Loop Visual
 animate();
 
-// Verifica sessão inicial
-if (gameState.user) {
-  switchView('mission-hub');
-  renderDashboard();
-} else {
-  switchView('landing-view');
-}
-// ==========================================
-// 🏁 INICIALIZAÇÃO (COLE NO FINAL DO ARQUIVO)
-// ==========================================
-
-// 2. Lógica de Inicialização
 window.addEventListener('load', () => {
-    console.log("🚦 Window Loaded. Checking Session...");
-    
-    // KILL SWITCH: Força o loader a sumir na marra
-    const loader = document.getElementById('loader');
-    if (loader) {
-        console.log("🔓 Unlocking Interface...");
-        loader.classList.add('hidden');
-        loader.style.display = 'none'; // Garante via CSS inline também
-    }
+  console.log("🚦 Window Loaded. System Check...");
 
-    // Verifica se já está logado
-    if (gameState.user) {
-        console.log(`👤 User found: ${gameState.user}. Redirecting to Hub.`);
-        switchView('mission-hub');
-        renderDashboard();
-    } else {
-        console.log("👤 No session. Showing Landing Page.");
-        switchView('landing-view');
-    }
+  // KILL SWITCH: Força o loader a sumir na marra
+  const loader = document.getElementById('loader');
+  if (loader) {
+    console.log("🔓 Unlocking Interface...");
+    loader.classList.add('hidden');
+    loader.style.display = 'none';
+  }
+
+  // Lógica de Sessão Inicial
+  if (gameState.user) {
+    console.log(`👤 User found: ${gameState.user}. Redirecting to Hub.`);
+    switchView('mission-hub');
+    renderDashboard();
+  } else {
+    console.log("👤 No session. Showing Landing Page.");
+    switchView('landing-view');
+  }
+
+  // Inicializa Tutorial UI se estivermos na view de tutorial (caso de recarregamento raro)
+  updateTutorialUI();
 });
