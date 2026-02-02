@@ -37,6 +37,7 @@ ClassMethod Login() As %Status
         Set %response.ContentType = ..#CONTENTTYPE
         Set payload = {}.%FromJSON(%request.Content)
         $$$ThrowOnError(##class(dc.mu5k3t.model.Player).Login(payload.username, .response))
+        Write response.%ToJSON()
     } Catch ex {
         Set tSC=ex.AsStatus()
     }
