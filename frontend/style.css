@@ -543,17 +543,98 @@ canvas {
 /* HUD */
 .hud {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  padding: 20px;
-  background: transparent;
-  pointer-events: none;
-  /* Make overlay transparent to clicks */
-  z-index: 20;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: auto;
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 15px;
+  border: 1px solid #4a9eff;
   display: flex;
-  flex-direction: column;
+  gap: 20px;
+  pointer-events: auto;
+  z-index: 20;
+}
+
+.hud-stat {
+  font-family: 'Inter', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud-stat .label {
+  color: #888;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.hud-stat .value {
+  font-size: 20px;
+  font-weight: 700;
+  min-width: 50px;
+}
+
+.hud-stat.fuel {
+  color: #00ffff;
+}
+
+.hud-stat.fuel .value {
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+}
+
+.hud-stat.health {
+  color: #00ff00;
+}
+
+.hud-stat.health .value {
+  text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+.hud-stat.health.low {
+  color: #ff4d4d;
+}
+
+.hud-stat.health.low .value {
+  text-shadow: 0 0 10px rgba(255, 77, 77, 0.5);
+  animation: pulse-health 1s infinite;
+}
+
+@keyframes pulse-health {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.hud-stat.score {
+  color: #ffd700;
+}
+
+.hud-stat.score .value {
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.hud-stat.steps {
+  color: #a855f7;
+}
+
+.hud-stat.steps .value {
+  font-family: monospace;
+  font-size: 22px;
+  text-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+}
+
+.hud-stat.status {
+  border-left: 1px solid rgba(255,255,255,0.2);
+  padding-left: 20px;
+}
+
+.hud-stat.status .value {
+  font-family: monospace;
+  font-size: 14px;
 }
 
 /* Individual HUD panels that need interaction */

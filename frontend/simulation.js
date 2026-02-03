@@ -53,349 +53,631 @@ const TOKEN_TYPES = {
   NEWLINE: 'NEWLINE'
 };
 
-class Tokenizer {
-  constructor(input) {
-    this.input = input;
+export class Lexer {
+  constructor(code) {
+    this.code = code;
     this.pos = 0;
     this.tokens = [];
   }
 
   tokenize() {
-    while (this.pos < this.input.length) {
-      const char = this.input[this.pos];
+    while (this.pos < this.code.length) {
+      const char = this.code[this.pos];
 
-      if (/\s/.test(char)) {
-        if (char === '\n') {
-          this.tokens.push({ type: TOKEN_TYPES.NEWLINE, value: '\n' });
-        } else {
-          this.tokens.push({ type: TOKEN_TYPES.WHITESPACE, value: char });
-        }
+      // Skip carriage returns
+      if (char === '\r') {
         this.pos++;
         continue;
       }
 
+      // Handle newlines
+      if (char === '\n') {
+        this.tokens.push({ type: TOKEN_TYPES.NEWLINE, value: '\n' });
+        this.pos++;
+        continue;
+      }
+
+      // Handle comments (ignore until end of line)
+      if (char === '/' && this.code[this.pos + 1] === '/') {
+        this.skipComment();
+        continue;
+      }
+
+      // Handle whitespace (but preserve it for some cases)
+      if (/\s/.test(char) && char !== '\n') {
+        const start = this.pos;
+        while (this.pos < this.code.length && /\s/.test(this.code[this.pos]) && this.code[this.pos] !== '\n') {
+          this.pos++;
+        }
+        continue;
+      }
+
+      // Handle strings
       if (char === '"') {
         this.readString();
         continue;
       }
 
-      // Allow % to start a word (for system classes/methods like %Get)
-      if (/[a-zA-Z_%]/.test(char)) {
-        this.readWord();
-        continue;
-      }
-
+      // Handle numbers
       if (/[0-9]/.test(char)) {
         this.readNumber();
         continue;
       }
 
-      if (char === '{') {
-        this.tokens.push({ type: TOKEN_TYPES.BLOCK_START, value: '{' });
-        this.pos++;
-        continue;
-      }
-      if (char === '}') {
-        this.tokens.push({ type: TOKEN_TYPES.BLOCK_END, value: '}' });
-        this.pos++;
-        continue;
-      }
-      if (char === '(') {
-        this.tokens.push({ type: TOKEN_TYPES.PAREN_START, value: '(' });
-        this.pos++;
-        continue;
-      }
-      if (char === ')') {
-        this.tokens.push({ type: TOKEN_TYPES.PAREN_END, value: ')' });
-        this.pos++;
-        continue;
-      }
-      if (char === ',') {
-        this.tokens.push({ type: TOKEN_TYPES.COMMA, value: ',' });
-        this.pos++;
+      // Handle identifiers and keywords
+      if (/[a-zA-Z_]/.test(char)) {
+        this.readIdentifier();
         continue;
       }
 
-      // Operators
-      if (['=', ':', '<', '>', '!', '+', '-', '*', '/'].includes(char)) {
-        const next = this.input[this.pos + 1];
-        if ((char === '>' || char === '<' || char === '!') && next === '=') {
-          this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: char + '=' });
-          this.pos += 2;
-          continue;
-        }
-        this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: char });
-        this.pos++;
+      // Handle operators and special characters
+      if (this.handleOperators()) {
         continue;
       }
 
-      // dots for object access ._Method
-      if (char === '.') {
-        this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: '.' });
-        this.pos++;
-        continue;
-      }
-
-      // Unknown
-      console.warn(`Unknown char: ${char}`);
+      // Unknown character - skip it
       this.pos++;
     }
+
     return this.tokens;
+  }
+
+  skipComment() {
+    // Skip until newline or end of string
+    while (this.pos < this.code.length && this.code[this.pos] !== '\n') {
+      this.pos++;
+    }
   }
 
   readString() {
     let value = '';
-    this.pos++; // Skip opening "
-    while (this.pos < this.input.length) {
-      const char = this.input[this.pos];
-      // Check for End of String (Quote NOT preceded by backslash)
-      if (char === '"' && this.input[this.pos - 1] !== '\\') {
+    this.pos++; // Skip opening quote
+
+    while (this.pos < this.code.length) {
+      const char = this.code[this.pos];
+      
+      // Handle escaped quotes
+      if (char === '\\' && this.code[this.pos + 1] === '"') {
+        value += '"';
+        this.pos += 2;
+        continue;
+      }
+
+      // End of string
+      if (char === '"') {
         break;
       }
+
       value += char;
       this.pos++;
     }
-    this.pos++; // Skip closing "
+
+    this.pos++; // Skip closing quote
     this.tokens.push({ type: TOKEN_TYPES.STRING, value });
   }
 
-  readWord() {
+  readNumber() {
     let value = '';
-    // Allow % inside word too
-    while (this.pos < this.input.length && /[a-zA-Z0-9_%]/.test(this.input[this.pos])) {
-      value += this.input[this.pos];
+    while (this.pos < this.code.length && /[0-9.]/.test(this.code[this.pos])) {
+      value += this.code[this.pos];
+      this.pos++;
+    }
+    this.tokens.push({ type: TOKEN_TYPES.NUMBER, value });
+  }
+
+  readIdentifier() {
+    let value = '';
+    while (this.pos < this.code.length && /[a-zA-Z0-9_]/.test(this.code[this.pos])) {
+      value += this.code[this.pos];
       this.pos++;
     }
 
+    // Check if it's a keyword
     const lower = value.toLowerCase();
-    // Keywords mapping
-    if (['set', 's'].includes(lower)) {
-      this.tokens.push({ type: TOKEN_TYPES.COMMAND, value: 'Set' });
-    } else if (['do', 'd'].includes(lower)) {
-      this.tokens.push({ type: TOKEN_TYPES.COMMAND, value: 'Do' });
-    } else if (['write', 'w'].includes(lower)) {
-      this.tokens.push({ type: TOKEN_TYPES.COMMAND, value: 'Write' });
-    } else if (['if', 'i'].includes(lower)) {
-      this.tokens.push({ type: TOKEN_TYPES.COMMAND, value: 'If' });
-    } else if (['elseif'].includes(lower)) {
-      this.tokens.push({ type: TOKEN_TYPES.COMMAND, value: 'ElseIf' });
-    } else if (['else', 'e'].includes(lower)) {
-      this.tokens.push({ type: TOKEN_TYPES.COMMAND, value: 'Else' });
-    } else if (['quit', 'q'].includes(lower)) {
-      this.tokens.push({ type: TOKEN_TYPES.COMMAND, value: 'Quit' });
+    if (['for', 'if', 'else', 'elseif', 'set', 'do', 'write', 'quit', 'return'].includes(lower)) {
+      this.tokens.push({ type: TOKEN_TYPES.COMMAND, value });
     } else {
       this.tokens.push({ type: TOKEN_TYPES.IDENTIFIER, value });
     }
   }
 
-  readNumber() {
-    let value = '';
-    while (this.pos < this.input.length && /[0-9.]/.test(this.input[this.pos])) {
-      value += this.input[this.pos];
+  handleOperators() {
+    const char = this.code[this.pos];
+    const next = this.code[this.pos + 1];
+
+    // Block start/end
+    if (char === '{') {
+      this.tokens.push({ type: TOKEN_TYPES.BLOCK_START, value: '{' });
       this.pos++;
+      return true;
     }
-    this.tokens.push({ type: TOKEN_TYPES.NUMBER, value });
+    if (char === '}') {
+      this.tokens.push({ type: TOKEN_TYPES.BLOCK_END, value: '}' });
+      this.pos++;
+      return true;
+    }
+
+    // Parentheses
+    if (char === '(') {
+      this.tokens.push({ type: TOKEN_TYPES.PAREN_START, value: '(' });
+      this.pos++;
+      return true;
+    }
+    if (char === ')') {
+      this.tokens.push({ type: TOKEN_TYPES.PAREN_END, value: ')' });
+      this.pos++;
+      return true;
+    }
+
+    // Comma
+    if (char === ',') {
+      this.tokens.push({ type: TOKEN_TYPES.COMMA, value: ',' });
+      this.pos++;
+      return true;
+    }
+
+    // Colon (used in For loops: start:step:end)
+    if (char === ':') {
+      this.tokens.push({ type: TOKEN_TYPES.COLON, value: ':' });
+      this.pos++;
+      return true;
+    }
+
+    // Assignment (=) and Equality (==)
+    if (char === '=') {
+      if (next === '=') {
+        this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: '==' });
+        this.pos += 2;
+      } else {
+        this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: '=' });
+        this.pos++;
+      }
+      return true;
+    }
+
+    // Dot (for %Get and other properties)
+    if (char === '.') {
+      this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: '.' });
+      this.pos++;
+      return true;
+    }
+
+    // Underscore (string concat in COS)
+    if (char === '_') {
+      this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: '+' }); // Convert to JS +
+      this.pos++;
+      return true;
+    }
+
+    // Comparison operators
+    if (['<', '>', '!'].includes(char)) {
+      if (next === '=') {
+        this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: char + '=' });
+        this.pos += 2;
+      } else {
+        this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: char });
+        this.pos++;
+      }
+      return true;
+    }
+
+    return false;
   }
 }
 
-class Parser {
+// ============================================
+// NEW PARSER - Token to JavaScript
+// ============================================
+export class Parser {
   constructor(tokens) {
     this.tokens = tokens;
     this.pos = 0;
-    this.output = '';
+    this.output = [];
   }
 
   parse() {
-    while (this.pos < this.tokens.length) {
-      this.parseStatement();
-    }
-    return this.output;
-  }
-
-  peek() {
-    return this.tokens[this.pos];
-  }
-
-  consume() {
-    return this.tokens[this.pos++];
-  }
-
-  // Skip whitespace helpers
-  skipWhitespace() {
-    while (this.pos < this.tokens.length &&
-      (this.tokens[this.pos].type === TOKEN_TYPES.WHITESPACE ||
-        this.tokens[this.pos].type === TOKEN_TYPES.NEWLINE)) {
-      this.pos++;
-    }
-  }
-
-  parseStatement() {
-    this.skipWhitespace();
-    const token = this.peek();
-
-    if (!token) return;
-
-    if (token.type === TOKEN_TYPES.COMMAND) {
-      this.consume();
-      this.handleCommand(token.value);
-    } else if (token.type === TOKEN_TYPES.BLOCK_START) {
-      this.consume();
-      this.output += ' {\n';
-    } else if (token.type === TOKEN_TYPES.BLOCK_END) {
-      this.consume();
-      this.output += ' }\n';
-    } else {
-      // Unknown or Expression statement?
-      // E.g. "x = 1" (invalid in COS usually, needs Set)
-      // But comments/empty lines handled by tokenizer?
-      // If we see Identifier or whatnot, check if it's a "Do-less" call?
-      // Actually, let's just consume it to avoid loop if nothing else.
-      this.consume();
-    }
-  }
-
-  handleCommand(cmd) {
-    let hasPostCond = false;
-    let condition = '';
-
-    // Check for Post-Conditional immediately (no skipWhitespace)
-    if (this.peek() && this.peek().type === TOKEN_TYPES.OPERATOR && this.peek().value === ':') {
-      hasPostCond = true;
-      this.consume(); // Skip the colon
-      // Parse condition until whitespace - this is a conditional context
-      condition = this.parseExpression(true, true);
-    }
-
-    let isStatement = true;
-    let js = '';
-
-    if (cmd === 'Set') {
-      js = this.parseSet() + ';';
-    } else if (cmd === 'Write') {
-      js = this.parseWrite() + ';';
-    } else if (cmd === 'Do') {
-      js = this.parseExpression() + ';';
-    } else if (cmd === 'Quit') {
-      js = 'return;';
-    } else if (cmd === 'If') {
-      isStatement = false;
-      const cond = this.parseExpression(false, true);
-      this.skipWhitespace();
-      // COS If requires parentheses in JS
-      js = `if (${cond})`;
-    } else if (cmd === 'Else') {
-      isStatement = false;
-      js = 'else ';
-    } else if (cmd === 'ElseIf') {
-      isStatement = false;
-      const cond = this.parseExpression(false, true);
-      js = `else if (${cond}) `;
-    }
-
-    if (isStatement) {
-      if (hasPostCond) {
-        this.output += `if (${condition}) { ${js} }\n`;
-      } else {
-        this.output += js + '\n';
-      }
-    } else {
-      if (hasPostCond) {
-        this.output += `if (${condition}) { ${js} `;
-      } else {
-        this.output += js;
-      }
-    }
-  }
-
-  parseSet() {
-    this.skipWhitespace();
-    const id = this.consume();
-    if (!id || id.type !== TOKEN_TYPES.IDENTIFIER) return '';
-
-    this.skipWhitespace();
-    const eq = this.consume();
-    if (!eq || eq.value !== '=') return '';
-
-    const val = this.parseExpression();
-    return `var ${id.value} = ${val}`;
-  }
-
-  parseWrite() {
-    const args = [];
-    while (true) {
-      const expr = this.parseExpression();
-      args.push(expr);
-
-      this.skipWhitespace();
-      if (this.peek() && this.peek().type === TOKEN_TYPES.COMMA) {
-        this.consume();
-      } else {
-        break;
-      }
-    }
-    return `roverApi.Write(${args.join(', ')})`;
-  }
-
-  parseExpression(stopAtWhitespace = false, isConditional = false) {
-    let expr = '';
-    let balance = 0;
+    this.output = [];
 
     while (this.pos < this.tokens.length) {
-      const t = this.peek();
+      const token = this.tokens[this.pos];
 
-      if (balance === 0) {
-        if (t.type === TOKEN_TYPES.BLOCK_START) break;
-        if (t.type === TOKEN_TYPES.BLOCK_END) break;
-
-        const isMemberAccess = expr.trim().endsWith('.');
-        if (t.type === TOKEN_TYPES.COMMAND && !isMemberAccess) break;
-        if (t.type === TOKEN_TYPES.COMMA && !isMemberAccess) break;
-        if (t.type === TOKEN_TYPES.NEWLINE) break;
-        if (stopAtWhitespace && t.type === TOKEN_TYPES.WHITESPACE) break;
-      }
-
-      if (t.type === TOKEN_TYPES.WHITESPACE) {
-        this.consume();
+      // Skip newlines at top level (they're just separators)
+      if (token.type === TOKEN_TYPES.NEWLINE) {
+        this.pos++;
         continue;
       }
 
-      if (t.type === TOKEN_TYPES.PAREN_START || t.type === TOKEN_TYPES.BLOCK_START) {
-        balance++;
-      } else if (t.type === TOKEN_TYPES.PAREN_END || t.type === TOKEN_TYPES.BLOCK_END) {
-        balance--;
-      }
-
-      let val = t.value;
-      if (t.type === TOKEN_TYPES.STRING) {
-        val = `"${val}"`;
-      }
-      else if (t.type === TOKEN_TYPES.BLOCK_START) {
-        val = '{ ';
-      }
-      else if (t.type === TOKEN_TYPES.BLOCK_END) {
-        val = ' }';
-      }
-      else if (t.type === TOKEN_TYPES.OPERATOR && val === '=') {
-        // Use == only in conditional contexts (If, ElseIf, Post-conditionals)
-        val = isConditional ? ' == ' : ' = ';
-      }
-      else if (t.type === TOKEN_TYPES.OPERATOR && ['<', '>', '<=', '>=', '!', '!='].includes(val)) {
-        val = ` ${val} `;
-      }
-      else if (t.type === TOKEN_TYPES.OPERATOR && val === '.') val = '.';
-
-      if (val.startsWith('%')) {
-        val = '_' + val.substring(1);
-      }
-
-      expr += val;
-      if (t.type === TOKEN_TYPES.COMMA) expr += ' ';
-      if (t.type === TOKEN_TYPES.OPERATOR && val.trim() === ':') expr += ' ';
-      this.consume();
+      this.parseStatement();
     }
-    return expr;
+
+    return this.output.join('');
+  }
+
+  parseStatement() {
+    const token = this.tokens[this.pos];
+
+    if (!token) return;
+
+    // Skip newlines
+    if (token.type === TOKEN_TYPES.NEWLINE) {
+      this.pos++;
+      return;
+    }
+
+    // Handle commands
+    if (token.type === TOKEN_TYPES.COMMAND) {
+      this.handleCommand(token.value);
+      return;
+    }
+
+    // Handle identifiers (likely function calls or expressions)
+    if (token.type === TOKEN_TYPES.IDENTIFIER) {
+      // Check if it's followed by a paren (function call)
+      if (this.peekNext()?.type === TOKEN_TYPES.PAREN_START) {
+        // Function call - output as-is
+        this.output.push(token.value);
+        this.pos++;
+      } else {
+        // Unknown identifier - skip it
+        this.pos++;
+      }
+      return;
+    }
+
+    // Skip unknown tokens
+    this.pos++;
+  }
+
+  handleCommand(cmd) {
+    const lowerCmd = cmd.toLowerCase();
+    const cmdToken = this.tokens[this.pos];
+    this.pos++; // Consume command
+
+    switch (lowerCmd) {
+      case 'for':
+        this.parseForLoop();
+        break;
+
+      case 'set':
+        this.parseSet();
+        break;
+
+      case 'do':
+        this.parseDo();
+        break;
+
+      case 'if':
+        this.parseIf();
+        break;
+
+      case 'elseif':
+        this.parseElseIf();
+        break;
+
+      case 'else':
+        this.parseElse();
+        break;
+
+      case 'write':
+        this.parseWrite();
+        break;
+
+      case 'quit':
+      case 'return':
+        this.output.push('return;');
+        break;
+
+      default:
+        // Unknown command - skip it
+        break;
+    }
+  }
+
+  parseForLoop() {
+    // Expect: For var = start : step : end { body }
+    if (this.pos >= this.tokens.length) return;
+    
+    const varName = this.tokens[this.pos].value;
+    this.pos++;
+
+    // Expect =
+    if (this.pos >= this.tokens.length) return;
+    if (this.tokens[this.pos].value !== '=') {
+      this.pos++;
+      return;
+    }
+    this.pos++;
+
+    // Read start value
+    if (this.pos >= this.tokens.length) return;
+    const start = this.tokens[this.pos].value;
+    this.pos++;
+
+    // Expect :
+    if (this.pos >= this.tokens.length) return;
+    if (this.tokens[this.pos].type !== TOKEN_TYPES.COLON) {
+      this.pos++;
+      return;
+    }
+    this.pos++;
+
+    // Read step
+    if (this.pos >= this.tokens.length) return;
+    const step = this.tokens[this.pos].value;
+    this.pos++;
+
+    // Expect :
+    if (this.pos >= this.tokens.length) return;
+    if (this.tokens[this.pos].type !== TOKEN_TYPES.COLON) {
+      this.pos++;
+      return;
+    }
+    this.pos++;
+
+    // Read end
+    if (this.pos >= this.tokens.length) return;
+    const end = this.tokens[this.pos].value;
+    this.pos++;
+
+    this.output.push(`for (let ${varName} = ${start}; ${varName} <= ${end}; ${varName} += ${step}) {`);
+    this.parseBlockBody();
+    this.output.push('}');
+  }
+
+  parseSet() {
+    if (this.pos >= this.tokens.length) return;
+
+    const nextToken = this.tokens[this.pos];
+
+    if (nextToken.type === TOKEN_TYPES.IDENTIFIER) {
+      let varName = nextToken.value;
+      this.pos++;
+
+      // Check for %Get pattern
+      while (this.pos < this.tokens.length && this.tokens[this.pos].type === TOKEN_TYPES.OPERATOR) {
+        const op = this.tokens[this.pos].value;
+        this.pos++;
+
+        if (op === '%' && this.pos < this.tokens.length && this.tokens[this.pos].type === TOKEN_TYPES.IDENTIFIER) {
+          const method = this.tokens[this.pos].value;
+          this.pos++;
+
+          if (this.pos < this.tokens.length && this.tokens[this.pos].type === TOKEN_TYPES.PAREN_START) {
+            this.pos++;
+            let key = '';
+            if (this.pos < this.tokens.length && this.tokens[this.pos].type === TOKEN_TYPES.STRING) {
+              key = this.tokens[this.pos].value;
+            } else if (this.pos < this.tokens.length && this.tokens[this.pos].type === TOKEN_TYPES.IDENTIFIER) {
+              key = this.tokens[this.pos].value;
+            }
+            this.pos++;
+            if (this.pos < this.tokens.length && this.tokens[this.pos].type === TOKEN_TYPES.PAREN_END) {
+              this.pos++;
+            }
+            varName = `${varName}._Get("${key}")`;
+          }
+        } else if (op === '.') {
+          if (this.pos < this.tokens.length && this.tokens[this.pos].type === TOKEN_TYPES.IDENTIFIER) {
+            varName += '.' + this.tokens[this.pos].value;
+            this.pos++;
+          }
+        }
+      }
+
+      if (this.pos < this.tokens.length && this.tokens[this.pos].type === TOKEN_TYPES.OPERATOR && this.tokens[this.pos].value === '=') {
+        this.pos++;
+        let value = this.parseValue();
+        this.output.push(`var ${varName} = ${value};`);
+      }
+    }
+  }
+
+  parseDo() {
+    if (this.pos >= this.tokens.length) return;
+
+    const methodName = this.tokens[this.pos].value;
+    this.pos++;
+
+    if (this.pos >= this.tokens.length || this.tokens[this.pos].type !== TOKEN_TYPES.PAREN_START) {
+      this.output.push(`await context.${methodName}();`);
+      return;
+    }
+    this.pos++;
+
+    let param = '';
+    if (this.pos < this.tokens.length && this.tokens[this.pos].type === TOKEN_TYPES.STRING) {
+      param = this.tokens[this.pos].value;
+      this.pos++;
+    } else if (this.pos < this.tokens.length && this.tokens[this.pos].type === TOKEN_TYPES.IDENTIFIER) {
+      param = this.tokens[this.pos].value;
+      this.pos++;
+    }
+
+    if (this.pos < this.tokens.length && this.tokens[this.pos].type === TOKEN_TYPES.PAREN_END) {
+      this.pos++;
+    }
+
+    if (param) {
+      this.output.push(`await context.${methodName}(${param});`);
+    } else {
+      this.output.push(`await context.${methodName}();`);
+    }
+  }
+
+  parseIf() {
+    const condition = this.parseCondition();
+    if (this.pos < this.tokens.length && this.tokens[this.pos].type === TOKEN_TYPES.BLOCK_START) {
+      this.pos++;
+      this.output.push(`if (${condition}) {`);
+      this.parseBlockBody();
+      this.output.push('}');
+    }
+  }
+
+  parseElseIf() {
+    const condition = this.parseCondition();
+    if (this.pos < this.tokens.length && this.tokens[this.pos].type === TOKEN_TYPES.BLOCK_START) {
+      this.pos++;
+      this.output.push(`else if (${condition}) {`);
+      this.parseBlockBody();
+      this.output.push('}');
+    }
+  }
+
+  parseElse() {
+    if (this.pos < this.tokens.length && this.tokens[this.pos].type === TOKEN_TYPES.BLOCK_START) {
+      this.pos++;
+      this.output.push('else {');
+      this.parseBlockBody();
+      this.output.push('}');
+    }
+  }
+
+  parseWrite() {
+    let output = '';
+    
+    while (this.pos < this.tokens.length) {
+      const token = this.tokens[this.pos];
+      
+      if (token.type === TOKEN_TYPES.NEWLINE || (token.type === TOKEN_TYPES.COMMAND)) {
+        break;
+      }
+
+      if (token.type === TOKEN_TYPES.STRING) {
+        output += `"${token.value}"`;
+      } else if (token.type === TOKEN_TYPES.IDENTIFIER) {
+        output += token.value;
+      } else if (token.type === TOKEN_TYPES.OPERATOR && token.value === '+') {
+        output += ' + ';
+      }
+      
+      this.pos++;
+    }
+
+    this.output.push(`roverApi.Write(${output});`);
+  }
+
+  parseCondition() {
+    let condition = '';
+    let depth = 0;
+
+    while (this.pos < this.tokens.length) {
+      const token = this.tokens[this.pos];
+
+      if (token.type === TOKEN_TYPES.NEWLINE) {
+        break;
+      }
+
+      if (token.type === TOKEN_TYPES.BLOCK_START) {
+        depth++;
+        condition += token.value;
+      } else if (token.type === TOKEN_TYPES.BLOCK_END) {
+        if (depth === 0) break;
+        depth--;
+        condition += token.value;
+      } else if (depth === 0 && token.type === TOKEN_TYPES.COMMAND) {
+        break;
+      } else {
+        if (token.type === TOKEN_TYPES.IDENTIFIER) {
+          condition += token.value;
+        } else if (token.type === TOKEN_TYPES.NUMBER) {
+          condition += token.value;
+        } else if (token.type === TOKEN_TYPES.STRING) {
+          condition += `"${token.value}"`;
+        } else if (token.type === TOKEN_TYPES.OPERATOR) {
+          if (token.value === '=') {
+            condition += ' = ';
+          } else if (token.value === '==') {
+            condition += ' == ';
+          } else if (['<', '>', '<=', '>='].includes(token.value)) {
+            condition += ` ${token.value} `;
+          } else {
+            condition += token.value;
+          }
+        } else if (token.type === TOKEN_TYPES.PAREN_START) {
+          condition += '(';
+        } else if (token.type === TOKEN_TYPES.PAREN_END) {
+          condition += ')';
+        }
+      }
+
+      this.pos++;
+    }
+
+    return condition.trim();
+  }
+
+  parseValue() {
+    let value = '';
+    let depth = 0;
+
+    while (this.pos < this.tokens.length) {
+      const token = this.tokens[this.pos];
+
+      if (token.type === TOKEN_TYPES.NEWLINE) {
+        break;
+      }
+
+      if (token.type === TOKEN_TYPES.BLOCK_START || token.type === TOKEN_TYPES.BLOCK_END) {
+        break;
+      }
+
+      if (token.type === TOKEN_TYPES.COMMAND) {
+        break;
+      }
+
+      if (token.type === TOKEN_TYPES.OPERATOR && token.value === '=') {
+        break;
+      }
+
+      if (token.type === TOKEN_TYPES.OPERATOR && token.value === '+') {
+        value += ' + ';
+      } else if (token.type === TOKEN_TYPES.STRING) {
+        value += `"${token.value}"`;
+      } else if (token.type === TOKEN_TYPES.NUMBER) {
+        value += token.value;
+      } else if (token.type === TOKEN_TYPES.IDENTIFIER) {
+        value += token.value;
+      } else if (token.type === TOKEN_TYPES.PAREN_START) {
+        value += '(';
+        depth++;
+      } else if (token.type === TOKEN_TYPES.PAREN_END) {
+        if (depth === 0) break;
+        value += ')';
+        depth--;
+      } else if (token.type === TOKEN_TYPES.OPERATOR) {
+        value += token.value;
+      }
+
+      this.pos++;
+    }
+
+    return value.trim();
+  }
+
+  parseBlockBody() {
+    while (this.pos < this.tokens.length) {
+      const token = this.tokens[this.pos];
+
+      if (token.type === TOKEN_TYPES.BLOCK_END) {
+        this.pos++;
+        break;
+      }
+
+      if (token.type === TOKEN_TYPES.NEWLINE) {
+        this.pos++;
+        continue;
+      }
+
+      this.parseStatement();
+    }
+  }
+
+  peekNext() {
+    return this.tokens[this.pos + 1];
   }
 }
+
 
 export const MISSIONS = {
   'M1': {

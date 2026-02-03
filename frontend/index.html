@@ -149,8 +149,25 @@
     <button id="back-to-hub-btn" class="btn-back">&lt;&lt; BACK TO DASHBOARD</button>
 
     <div id="hud" class="hud">
-      Fuel: <span id="fuel-display">100</span> | HP: <span id="hp-display" style="color:#0f0">100%</span> | Score: <span
-        id="score-display">0</span>
+      <div class="hud-stat fuel">
+        <span class="label">Fuel</span>
+        <span id="fuel-display" class="value">100</span>
+      </div>
+      <div class="hud-stat health">
+        <span class="label">HP</span>
+        <span id="hp-display" class="value">100</span>
+      </div>
+      <div class="hud-stat score">
+        <span class="label">Score</span>
+        <span id="score-display" class="value">0</span>
+      </div>
+      <div class="hud-stat steps">
+        <span class="label">Steps</span>
+        <span id="steps-display" class="value">0</span>
+      </div>
+      <div class="hud-stat status">
+        <span id="status-display" class="value" style="color:#4a9eff">READY</span>
+      </div>
       <span id="toxic-warning" class="toxic-warning hidden">TOXIC WARNING</span>
     </div>
 
