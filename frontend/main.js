@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Simulation } from './simulation.js';
 
 // --- VERSÃO DE DEBUG ---
-console.log("🔹 FRONTEND BUILD: v3.3 - " + new Date().toISOString());
+console.log("🔹 FRONTEND BUILD: v3.7 - " + new Date().toISOString());
 console.log("🔹 API TARGET: /mu5k3t/api");
 
 // --- CONFIGURAÇÃO GLOBAL ---
@@ -139,13 +139,11 @@ async function initEnvironment(mode, missionId) {
     const centerOffset = worldSize / 2 - (TILE_SIZE / 2);
 
     // Helper function to convert logical grid coordinates to world coordinates
-    // This shifts (0,0) from world center to grid corner
-    const gridToWorld = (gx, gz) => {
-        return {
-            x: (gx * TILE_SIZE) - centerOffset,
-            z: (gz * TILE_SIZE) - centerOffset
-        };
-    };
+    const offset = (gridSize * 1.2) / 2 - 0.6; // 0.6 is half tile
+    const gridToWorld = (x, z) => ({
+      x: (x * 1.2) - offset,
+      z: (z * 1.2) - offset
+    });
 
     // 5. DANGER ROOM GRID (Dynamic Size) - High Contrast Colors
     const gridHelper = new THREE.GridHelper(worldSize, gridSize, 0x00FFFF, 0x9966CC);
@@ -162,7 +160,7 @@ async function initEnvironment(mode, missionId) {
 
     // Dynamic Camera Zoom - Position camera to view entire grid
     const viewSize = Math.max(15, worldSize * 0.8);
-    
+
     // Update Camera
     const aspect = window.innerWidth / window.innerHeight;
     camera.left = -viewSize * aspect;
@@ -171,7 +169,7 @@ async function initEnvironment(mode, missionId) {
     camera.bottom = -viewSize;
     camera.zoom = 1; // Reset zoom
     camera.updateProjectionMatrix();
-    
+
     // Position camera at proper angle looking at center of the board
     camera.position.set(centerOffset * 1.5, worldSize * 0.8, centerOffset * 1.5);
     camera.lookAt(0, 0, 0); // Look at world center (middle of grid)
@@ -205,10 +203,10 @@ async function initEnvironment(mode, missionId) {
     const roverStart = mapData.roverStart || { x: 0, z: 0 };
     const roverPos = gridToWorld(roverStart.x, roverStart.z);
     roverMesh.position.set(roverPos.x, 0.2, roverPos.z); // Slight hover
-    roverMesh.userData = { 
+    roverMesh.userData = {
       type: 'ROVER',
       originalColor: 0xffffff,
-      flashDamage: function() {
+      flashDamage: function () {
         roverMesh.traverse((child) => {
           if (child.isMesh && child.material) {
             const oldColor = child.material.color.getHex();
@@ -271,7 +269,7 @@ async function initEnvironment(mode, missionId) {
     // 10. Sensor Visualization (Multiple Tile Sensors)
     const sensorMeshes = {};
     const sensorGeo = new THREE.PlaneGeometry(TILE_SIZE * 0.9, TILE_SIZE * 0.9);
-    
+
     // Sensor 1: Front (Yellow)
     const frontMat = new THREE.MeshBasicMaterial({
       color: 0xFFFF00,
@@ -315,7 +313,7 @@ async function initEnvironment(mode, missionId) {
     scene.add(sensorMeshes.left);
 
     // Sensor 4: Right (Cyan)
-    sensorMeshes.right = new THREE.Mesh(sensorGeo, leftMat);
+    sensorMeshes.right = new THREE.Mesh(sensorGeo, leftMat); // Uses same cyan material
     sensorMeshes.right.rotation.x = -Math.PI / 2;
     sensorMeshes.right.position.y = 0.025;
     sensorMeshes.right.visible = false;
@@ -349,36 +347,36 @@ async function initEnvironment(mode, missionId) {
 // Cleanup function to properly reset simulation state
 const cleanupSimulation = () => {
   console.log("🧹 Cleaning up simulation...");
-  
+
   // Stop any running simulation
   if (Simulation && Simulation.stop) {
     Simulation.stop();
   }
-  
+
   // Clear the scene but keep essential objects
   const essentialObjects = [];
   scene.traverse((child) => {
     // Keep lights, camera, and renderer
-    if (child.type === 'AmbientLight' || 
-        child.type === 'DirectionalLight' ||
-        child === camera ||
-        child === renderer) {
+    if (child.type === 'AmbientLight' ||
+      child.type === 'DirectionalLight' ||
+      child === camera ||
+      child === renderer) {
       essentialObjects.push(child);
     }
   });
-  
+
   // Remove all children
   while (scene.children.length > 0) {
     scene.remove(scene.children[0]);
   }
-  
+
   // Re-add essential objects
   essentialObjects.forEach(obj => scene.add(obj));
-  
+
   // Reset game state
   gameState.rover = null;
   gameState.isRunning = false;
-  
+
   console.log("✅ Simulation cleaned up");
 };
 
