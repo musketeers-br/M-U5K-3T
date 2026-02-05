@@ -411,6 +411,12 @@ const cleanupSimulation = () => {
 // Global reset function
 window.resetGame = async () => {
   cleanupSimulation();
+
+  // Clear modal and state
+  const goScreen = document.getElementById('game-over-screen');
+  if (goScreen) goScreen.classList.add('hidden');
+  gameState.isGameOver = false;
+
   await initEnvironment(gameState.mode, gameState.currentMission || 'M1');
 };
 
@@ -440,14 +446,27 @@ const switchView = (viewId) => {
 
 const updateHUD = (data) => {
   try {
+    // Check Game Over Conditions
+    if ((data.health <= 0 || data.fuel <= 0) && !gameState.isGameOver) {
+      gameState.isGameOver = true;
+      const gameOverScreen = document.getElementById('game-over-screen');
+      const reasonEl = document.getElementById('game-over-reason');
+
+      if (gameOverScreen) gameOverScreen.classList.remove('hidden');
+      if (reasonEl) reasonEl.innerText = data.health <= 0 ? "HULL BREACH" : "FUEL DEPLETED";
+
+      // Stop Simulation
+      if (typeof Simulation !== 'undefined' && Simulation.stop) Simulation.stop();
+    }
+
     // Update Fuel
     const fuelEl = document.getElementById('fuel-display');
-    if (fuelEl) fuelEl.innerText = Math.floor(data.fuel || 100);
+    if (fuelEl) fuelEl.innerText = Math.floor(data.fuel || 0); // Default to 0 if undefined
 
     // Update HP with color coding
     const hpEl = document.getElementById('hp-display');
     if (hpEl) {
-      const hp = Math.floor(data.health || 100);
+      const hp = Math.floor(data.health || 0); // Default to 0
       hpEl.innerText = hp;
       if (hp <= 30) {
         hpEl.style.color = '#ff4d4d';
@@ -468,7 +487,7 @@ const updateHUD = (data) => {
 
     // Update Status
     const statusEl = document.getElementById('status-display');
-    if (statusEl && data.status) statusEl.innerText = data.status;
+    if (statusEl) statusEl.innerText = data.status || "OFFLINE";
   } catch (e) {
     console.error("HUD Update Error:", e);
   }
@@ -742,6 +761,30 @@ if (rBtn) rBtn.onclick = window.resetGame;
 
 const backBtn = document.getElementById('back-to-hub-btn');
 if (backBtn) backBtn.onclick = window.backToDashboard;
+
+const termToggle = document.getElementById('toggle-terminal');
+const termEl = document.getElementById('terminal');
+if (termToggle && termEl) {
+  termToggle.onclick = () => {
+    termEl.classList.toggle('collapsed');
+    termToggle.innerText = termEl.classList.contains('collapsed') ? '<' : '>';
+  };
+}
+
+const exportBtn = document.getElementById('btn-export');
+if (exportBtn) {
+  exportBtn.onclick = () => {
+    const code = document.getElementById('code-editor').value;
+    const blob = new Blob([code], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'MissionControl.cls';
+    a.click();
+  };
+}
+
+const retryBtn = document.getElementById('retry-btn');
+if (retryBtn) retryBtn.onclick = window.resetGame;
 
 const execBtn = document.getElementById('execute-test-btn');
 if (execBtn) execBtn.onclick = () => {

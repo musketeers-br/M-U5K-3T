@@ -178,34 +178,31 @@
           style="background:none; border:none; color:white; cursor:pointer; font-size: 14px; opacity: 0.7; transition: opacity 0.2s;">[EXP]</button>
       </div>
       <textarea id="code-editor" spellcheck="false">
-ClassMethod OnTick(context As %DynamicObject)
+ClassMethod OnTick(ByRef context As %DynamicObject)
 {
-    Set rover = context.%Get("rover")
-    Set memory = context.%Get("memory")
-    Set step = memory.%Get("step")
-    If step = "" { Set step = 0 }
+    // --- SENSORS ---
+    // Set rover = context.%Get("rover")
+    // Set sensors = rover.sensors
+    // Write sensors.%Get("front") ; Returns: "OBSTACLE", "MINERAL", "CLEAR"
 
-    // API V2: Action-Based Context
-    // Available Actions:
-    // 1. {"turn": "direction"}
-    // 2. {"move": ""}
-    // 3. {"rotate_and_move": "direction"} (Advanced)
+    // --- ACTIONS (Set ONE per tick) ---
+    
+    // 1. MOVE (Forward 1 tile)
+    // Do context.%Set("action", {"move": ""})
 
-    If step < 5 {
-         // Move Forward (North)
-         Do context.%Set("action", {"move": ""})
-    } ElseIf step = 5 {
-         // Turn East AND Move in one tick
-         Do context.%Set("action", {"rotate_and_move": "east"})
-    } ElseIf step < 11 {
-         Do context.%Set("action", {"move": ""})
-    } ElseIf step = 11 {
-         Do context.%Set("action", {"rotate_and_move": "south"})
-    } ElseIf step < 17 {
-         Do context.%Set("action", {"move": ""})
+    // 2. TURN ( "north", "south", "east", "west" )
+    // Do context.%Set("action", {"turn": "east"})
+
+    // 3. ROTATE & MOVE (Turn + Move in single tick)
+    // Do context.%Set("action", {"rotate_and_move": "east"})
+
+    // --- YOUR LOGIC BELOW ---
+    If (sensors.%Get("front") = "CLEAR") {
+        Do context.%Set("action", {"move": ""})
+    } Else {
+        // Simple Obstacle Avoidance
+        Do context.%Set("action", {"rotate_and_move": "east"})
     }
-
-    Do memory.%Set("step", step + 1)
 }
         </textarea>
       <div id="mission-info" class="mission-info">
