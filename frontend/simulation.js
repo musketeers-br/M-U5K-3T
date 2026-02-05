@@ -34,7 +34,8 @@ const lib = {
     return parts[index - 1];
   },
   Length: (str) => (str ? String(str).length : 0),
-  Get: (val, defaultVal) => ((val !== undefined && val !== null && val !== "") ? val : defaultVal)
+  Get: (val, defaultVal) => ((val !== undefined && val !== null && val !== "") ? val : defaultVal),
+  Random: (max) => Math.random() * max
 };
 
 // --- LEXER DEFINITIONS ---
@@ -70,7 +71,7 @@ export class Lexer {
       if (char === '"') { this.readString(); continue; }
       if (/[0-9]/.test(char)) { this.readNumber(); continue; }
       if (this.handleOperators()) { continue; }
-      if (/[a-zA-Z_]/.test(char)) { this.readIdentifier(); continue; }
+      if (/[a-zA-Z_$]/.test(char)) { this.readIdentifier(); continue; }
       this.pos++;
     }
     this.tokens.push({ type: TOKEN_TYPES.EOF, value: '' });
@@ -132,6 +133,7 @@ export class Lexer {
       else { this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: char }); this.pos++; }
       return true;
     }
+    // Arithmetic Ops
     if (['+', '-', '*', '/'].includes(char)) {
       this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: char });
       this.pos++;
@@ -164,7 +166,6 @@ export class Parser {
     this.pos = 0;
     this.output = [];
     this.insideClassMethod = false;
-    // SCOPE AWARENESS: Track known locals
     this.locals = new Set(['memory', 'rover', 'json']);
   }
 
@@ -213,12 +214,10 @@ export class Parser {
 
   parseSet() {
     const name = this.parseExpression(true);
-    // Register local variable if simpler identifier
     const simpleName = name.split(/[.([ ]/)[0];
     if (simpleName && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(simpleName)) {
       this.locals.add(simpleName);
     }
-
     if (this.check(TOKEN_TYPES.OPERATOR, '=')) {
       this.pos++;
       const val = this.parseExpression(false);
@@ -228,12 +227,10 @@ export class Parser {
 
   parseDo() {
     const expr = this.parseExpression(false);
-    // Scope Awareness Check
     const rootVar = expr.split(/[.(]/)[0];
     const isAsync = expr.includes('(') || expr.includes('._');
 
     let line = "";
-    // If it starts with a known local, do not prepend context
     if (this.locals.has(rootVar) ||
       rootVar === 'context' ||
       rootVar === 'memory' ||
@@ -243,12 +240,11 @@ export class Parser {
       rootVar.startsWith('roverApi.')) {
       line = expr;
     } else {
-      // Assume implicit context method
       line = `context.${expr}`;
     }
 
     if (isAsync) this.output.push(`await ${line};`);
-    else this.output.push(`${line};`); // fallback
+    else this.output.push(`${line};`);
   }
 
   parseWrite() {
@@ -269,9 +265,8 @@ export class Parser {
   parseForLoop() {
     const varNameToken = this.tokens[this.pos];
     const varName = varNameToken.original || varNameToken.value;
-    this.locals.add(varName); // Register loop var
+    this.locals.add(varName);
     this.pos++;
-
     this.consume(TOKEN_TYPES.OPERATOR, '=');
     const start = this.tokens[this.pos].value; this.pos++;
     this.consume(TOKEN_TYPES.COLON);
@@ -323,7 +318,7 @@ export class Parser {
       } else if (t.type === TOKEN_TYPES.OPERATOR) {
         if (t.value === '+') res += ' + ';
         else if (t.value === '=') { if (isLeft) break; res += ' == '; }
-        else res += " " + t.value + " "; // OPERATOR FIX: Add spaces around operators
+        else res += " " + t.value + " ";
         this.pos++;
       } else {
         res += t.value; this.pos++;
@@ -372,20 +367,57 @@ export class Parser {
     return chain;
   }
 
+  // --- RECURSIVE PAREN PARSING FIX ---
   parseParenGroup() {
-    let res = "("; this.consume(TOKEN_TYPES.LPAREN);
-    while (!this.check(TOKEN_TYPES.RPAREN) && !this.check(TOKEN_TYPES.EOF)) {
-      if (this.check(TOKEN_TYPES.LBRACE)) res += this.parseJsonLiteral();
-      else {
-        const t = this.tokens[this.pos];
+    let res = "(";
+    this.consume(TOKEN_TYPES.LPAREN);
+    let balance = 1;
+
+    while (balance > 0 && this.pos < this.tokens.length) {
+      const t = this.tokens[this.pos];
+
+      if (this.check(TOKEN_TYPES.EOF)) break;
+
+      if (this.check(TOKEN_TYPES.LPAREN)) {
+        balance++;
+        res += "(";
+        this.pos++;
+        continue;
+      }
+
+      if (this.check(TOKEN_TYPES.RPAREN)) {
+        balance--;
+        res += ")";
+        this.pos++;
+        if (balance === 0) break; // Finished THIS group
+        continue;
+      }
+
+      if (this.check(TOKEN_TYPES.LBRACE)) {
+        res += this.parseJsonLiteral();
+      } else {
         if (t.value === '=') res += '==';
         else if (t.type === TOKEN_TYPES.IDENTIFIER || t.type === TOKEN_TYPES.COMMAND) {
-          let val = t.original || t.value; this.pos++; val += this.parseChain(); res += val; continue;
+          let val = t.original || t.value; this.pos++;
+
+          if (val.startsWith('$')) {
+            val = `lib.${val.substring(1)}`;
+            if (this.check(TOKEN_TYPES.LPAREN)) val += this.parseParenGroup();
+            res += val;
+          } else {
+            val += this.parseChain();
+            res += val;
+          }
         }
-        else res += t.value; this.pos++;
+        else if (t.type === TOKEN_TYPES.OPERATOR) {
+          res += t.value; this.pos++;
+        }
+        else {
+          res += t.value; this.pos++;
+        }
       }
     }
-    this.consume(TOKEN_TYPES.RPAREN); res += ")"; return res;
+    return res;
   }
 
   parseJsonLiteral() {
@@ -413,10 +445,14 @@ export class Parser {
 
 // --- SIMULATION RUNTIME ---
 export const Simulation = {
-  state: { rover: null, mapData: null, running: false, fuel: 100, health: 100, score: 0, steps: 0, interval: null, gridSize: 25, memory: {}, grid: [], missionId: 'M1' },
+  state: { rover: null, mapData: null, running: false, fuel: 100, health: 100, score: 0, steps: 0, interval: null, gridSize: 25, memory: {}, grid: [], missionId: 'M1', scene: null, sensorMeshes: {} },
   init(mapData, roverMesh, scene, onHudUpdate, sensorMeshes = {}) {
-    console.log("⚙️ Simulation Engine v4.0 (Scope-Aware) Initializing...");
-    this.state.mapData = mapData; this.state.rover = roverMesh; this.state.updateHUD = onHudUpdate; this.state.sensorMeshes = sensorMeshes;
+    console.log("⚙️ Simulation Engine v4.1 (Nested+Visuals) Initializing...");
+    this.state.mapData = mapData;
+    this.state.rover = roverMesh;
+    this.state.scene = scene; // Store scene provided in init
+    this.state.updateHUD = onHudUpdate;
+    this.state.sensorMeshes = sensorMeshes;
     this.state.fuel = 100; this.state.health = 100; this.state.score = 0; this.state.steps = 0; this.state.running = false; this.state.memory = {};
     this.state.gridSize = mapData.gridSize || 25;
     const offset = (this.state.gridSize * 1.2) / 2 - 0.6;
@@ -428,27 +464,24 @@ export const Simulation = {
   },
   stop() { if (this.state.interval) clearInterval(this.state.interval); },
 
-  // RUNCODE UPGRADE
   async runCode(userCode) {
     if (!this.state.rover) { console.error("Rover not initialized!"); return; }
     try {
       const tokens = new Lexer(userCode).tokenize();
-
-      // 1. Validation Phase
       new Validator(tokens).validate();
-
-      // 2. Transpilation Phase
       const parser = new Parser(tokens);
       const jsCode = parser.parse();
       console.log("📜 JS Output:\n", jsCode);
-
-      // 3. Execution Phase
       const rawContextData = { rover: { sensors: { front: "CLEAR" } }, memory: this.state.memory, output: { action: "WAIT", param: "" } };
       const contextWrapper = new DynamicObjectWrapper(rawContextData);
-      contextWrapper.Move = () => this.moveRover(); contextWrapper.Turn = (d) => this.turnRover(d); contextWrapper.Collect = () => this.collectMineral(); contextWrapper.Scan = () => this.scanSensors(); contextWrapper.Set = (k, v) => contextWrapper._Set(k, v);
-      const roverApi = { Write: (...args) => console.log("📡", ...args) };
+      // Map API methods
+      contextWrapper.Move = () => this.moveRover();
+      contextWrapper.Turn = (d) => this.turnRover(d);
+      contextWrapper.Collect = () => this.collectMineral();
+      contextWrapper.Scan = () => this.scanSensors();
+      contextWrapper.Set = (k, v) => contextWrapper._Set(k, v);
 
-      // Inject MEMORY object directly for scope-aware variables
+      const roverApi = { Write: (...args) => console.log("📡", ...args) };
       const memoryWrapper = new DynamicObjectWrapper(this.state.memory);
 
       const userFunction = new AsyncFunction('context', 'roverApi', 'lib', 'memory', jsCode);
@@ -457,13 +490,14 @@ export const Simulation = {
       const executeStep = async () => {
         if (!this.state.running) return;
         try {
-          rawContextData.rover.sensors = this.scanSensors(true);
-          // Pass memoryWrapper explicitly
-          await userFunction(contextWrapper, roverApi, lib, memoryWrapper);
+          // No auto scan before step to saveperf? or yes? logic implies explicit scan usually but we inject data
+          // Injecting 'Scan' implicitly into data is okay but user asked for visuals in scanSensors.
+          // Since context calls scanSensors(), we don't need to double call here unless to update 'rover.sensors' property.
+          rawContextData.rover.sensors = this.scanSensors(true); // true = silent/internal update only? No, we want visuals if user calls it.
+          // Wait, if user calls Do Scan(), it triggers this.scanSensors() which shows visuals.
+          // But here we update context.rover.sensors without showing visuals hopefully.
 
-          // Sync back? memoryWrapper shares ref to state.memory via init? No for primitive changes if wrappers are used logic might differ, 
-          // but DynamicObjectWrapper updates this.data reference. 
-          // this.state.memory is passed by ref to wrapper.
+          await userFunction(contextWrapper, roverApi, lib, memoryWrapper);
 
           this.state.steps++;
           const out = rawContextData.output;
@@ -479,20 +513,90 @@ export const Simulation = {
     }
   },
 
-  async moveRover() { if (!this.state.running || this.state.fuel <= 0) return false; const dir = this.state.memory.direction || 'north'; let nx = this.state.memory.x, nz = this.state.memory.z; if (dir === 'north') nz--; if (dir === 'south') nz++; if (dir === 'east') nx++; if (dir === 'west') nx--; if (nx < 0 || nx >= this.state.gridSize || nz < 0 || nz >= this.state.gridSize) return false; if (this.state.mapData.obstacles && this.state.mapData.obstacles.some(o => o.x === nx && o.z === nz)) { this.state.health -= 10; return false; } this.state.memory.x = nx; this.state.memory.z = nz; this.state.fuel -= 1; if (this.state.rover) { const wp = this.state.gridToWorld(nx, nz); this.state.rover.position.set(wp.x, 0.2, wp.z); } return true; },
+  async moveRover() {
+    if (!this.state.running || this.state.fuel <= 0) return false;
+    const dir = this.state.memory.direction || 'north';
+    let nx = this.state.memory.x, nz = this.state.memory.z;
+    if (dir === 'north') nz--; if (dir === 'south') nz++; if (dir === 'east') nx++; if (dir === 'west') nx--;
+    if (nx < 0 || nx >= this.state.gridSize || nz < 0 || nz >= this.state.gridSize) return false;
+
+    // Collision logic with Visual Feedback
+    if (this.state.mapData.obstacles && this.state.mapData.obstacles.some(o => o.x === nx && o.z === nz)) {
+      this.state.health -= 10;
+      if (this.state.rover && this.state.rover.userData.flashDamage) {
+        this.state.rover.userData.flashDamage(); // Trigger Flash
+      }
+      return false;
+    }
+
+    this.state.memory.x = nx; this.state.memory.z = nz; this.state.fuel -= 1;
+    if (this.state.rover) { const wp = this.state.gridToWorld(nx, nz); this.state.rover.position.set(wp.x, 0.2, wp.z); }
+    return true;
+  },
+
   async turnRover(d) { if (!this.state.running) return; this.state.memory.direction = d.toLowerCase(); if (this.state.rover) { const r = { north: 0, east: Math.PI / 2, south: Math.PI, west: -Math.PI / 2 }; this.state.rover.rotation.y = r[d.toLowerCase()] || 0; } },
-  collectMineral() { const x = this.state.memory.x, z = this.state.memory.z; const idx = this.state.mapData.minerals.findIndex(m => m.x === x && m.z === z); if (idx >= 0) { this.state.score += 50; this.state.mapData.minerals.splice(idx, 1); console.log("Mineral Collected"); } },
-  scanSensors() { return { front: "CLEAR" }; },
+
+  collectMineral() {
+    const x = this.state.memory.x, z = this.state.memory.z;
+    const idx = this.state.mapData.minerals.findIndex(m => m.x === x && m.z === z);
+    if (idx >= 0) {
+      this.state.score += 50;
+      this.state.mapData.minerals.splice(idx, 1);
+      console.log("Mineral Collected");
+
+      // Visual: Remove Mesh from Scene
+      if (this.state.scene) {
+        // Find mesh at this grid pos
+        // Note: mapData coordinates are grid. We need to check approximate world pos or userData.
+        // Ideally meshes have userData.x/.z from creation.
+        const target = this.state.scene.children.find(c =>
+          c.userData && c.userData.type === 'MINERAL' && c.userData.x === x && c.userData.z === z
+        );
+        if (target) {
+          target.visible = false;
+        }
+      }
+    }
+  },
+
+  // VISUAL SENSORS LOGIC
+  scanSensors(isInternal = false) {
+    const x = this.state.memory.x;
+    const z = this.state.memory.z;
+    const dir = this.state.memory.direction;
+
+    // Front Coordinate
+    let fx = x, fz = z;
+    if (dir === 'north') fz--; if (dir === 'south') fz++; if (dir === 'east') fx++; if (dir === 'west') fx--;
+
+    // Visual Feedback (Only if explicit scan call or we want to flash sensors every step?)
+    // Usually Scan() is an action.
+    if (!isInternal && this.state.sensorMeshes && this.state.sensorMeshes.front) {
+      const mesh = this.state.sensorMeshes.front;
+      const wp = this.state.gridToWorld(fx, fz);
+      mesh.position.set(wp.x, 0.5, wp.z);
+      mesh.visible = true;
+      setTimeout(() => { mesh.visible = false; }, 300);
+    }
+
+    // Logic Check
+    if (fx < 0 || fx >= this.state.gridSize || fz < 0 || fz >= this.state.gridSize) return { front: "OBSTACLE" }; // Boundary
+    if (this.state.mapData.obstacles.some(o => o.x === fx && o.z === fz)) return { front: "OBSTACLE" };
+    if (this.state.mapData.minerals.some(m => m.x === fx && m.z === fz)) return { front: "MINERAL" };
+
+    return { front: "CLEAR" };
+  },
 
   async runTests() {
-    console.log("🧪 Running v4.0 Transpiler Tests...");
+    console.log("🧪 Running v4.1 Transpiler Tests...");
     const tests = [
       { name: "Legacy Abbrev", code: 's x=1', expect: 'x = 1;' },
       { name: "Scope Local", code: 'Do memory.%Set("x",1)', expect: 'await memory._Set("x",1);' },
       { name: "Double Context Fix", code: 'Do context.%Set("x",1)', expect: 'await context._Set("x",1);' },
       { name: "Operator Space", code: 's x=a+b', expect: 'x = a + b;' },
       { name: "JSON Param", code: 'd f({"a":1})', expect: 'await context.f({"a":1});' },
-      { name: "Chain", code: 's v=o.%Get("k").%Get("v")', expect: 'v = o._Get("k")._Get("v");' }
+      { name: "Chain", code: 's v=o.%Get("k").%Get("v")', expect: 'v = o._Get("k")._Get("v");' },
+      { name: "Nested Func", code: 's x=$Piece($Random(10),".",1)', expect: 'x = lib.Piece(lib.Random(10),".",1);' }
     ];
     let passed = 0;
     for (const t of tests) {
