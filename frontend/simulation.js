@@ -564,6 +564,10 @@ export const Simulation = {
 
   async moveRover() {
     if (!this.state.running || this.state.fuel <= 0) return false;
+
+    // Auto-scan surrounding tactical grid (Situational Awareness)
+    ['front', 'far', 'left', 'right'].forEach(dir => this.scanSensors(false, dir));
+
     const dir = this.state.memory.direction || 'north';
 
     // Calculate Next Position (Floating Point)
@@ -654,28 +658,45 @@ export const Simulation = {
   },
 
   // DIRECTIONAL SENSORS (Logic + Visuals)
+  // DIRECTIONAL SENSORS (Logic + Visuals)
   scanSensors(isInternal = false, relativeDir = 'front') {
+    // 1. Current State
     const x = Number(this.state.memory.x);
     const z = Number(this.state.memory.z);
-    const facing = this.state.memory.direction || 'north';
+    const facing = (this.state.memory.direction || 'north').toLowerCase();
 
+    // 2. Directional Logic (Clockwise: N -> E -> S -> W)
     const dirs = ['north', 'east', 'south', 'west'];
-    let idx = dirs.indexOf(facing);
-    let offset = 0;
+    const currentIdx = dirs.indexOf(facing);
 
-    if (relativeDir === 'front') offset = 0;
-    else if (relativeDir === 'right') offset = 1;
-    else if (relativeDir === 'back') offset = 2;
-    else if (relativeDir === 'left') offset = 3;
-    else if (relativeDir === 'far') offset = 0;
+    // 3. Determine Target Direction & Distance
+    let targetIdx = currentIdx;
+    let steps = 1;
 
-    const targetIdx = (idx + offset) % 4;
+    if (relativeDir === 'front') {
+      targetIdx = currentIdx; // Same dir
+      steps = 1;
+    } else if (relativeDir === 'far') { // "front_far" logic
+      targetIdx = currentIdx; // Same dir
+      steps = 2;
+    } else if (relativeDir === 'right') {
+      targetIdx = (currentIdx + 1) % 4; // +90 deg
+      steps = 1;
+    } else if (relativeDir === 'left') { // -90 deg (or +270)
+      targetIdx = (currentIdx + 3) % 4;
+      steps = 1;
+    } else if (relativeDir === 'back') {
+      targetIdx = (currentIdx + 2) % 4; // 180 deg
+      steps = 1;
+    }
+
     const targetDir = dirs[targetIdx];
 
-    // Calculate Target Coordinate
-    let fx = x, fz = z;
-    const steps = (relativeDir === 'far') ? 2 : 1;
+    // 4. Calculate Coordinates (Robust Delta)
+    let fx = x;
+    let fz = z;
 
+    // Apply steps
     for (let i = 0; i < steps; i++) {
       if (targetDir === 'north') fz--;
       if (targetDir === 'south') fz++;
@@ -683,32 +704,46 @@ export const Simulation = {
       if (targetDir === 'west') fx--;
     }
 
-    if (!isInternal) {
-      console.log(`🔎 SCAN [${relativeDir}]: At(${x},${z}) Dir(${facing}) -> Check(${fx},${fz})`);
+    // 5. Bounds & Object Detection (Existing Logic)
+    let result = "CLEAR";
+    if (fx < 0 || fx >= this.state.gridSize || fz < 0 || fz >= this.state.gridSize) {
+      result = "OBSTACLE"; // Out of bounds is an obstacle
+    } else if (this.state.mapData.obstacles.some(o => Math.round(o.x) === fx && Math.round(o.z) === fz)) {
+      result = "OBSTACLE";
+    } else if (this.state.mapData.minerals.some(m => Math.round(m.x) === fx && Math.round(m.z) === fz)) {
+      result = "MINERAL";
     }
 
-    // VISUAL FEEDBACK
-    if (!isInternal && this.state.sensorMeshes) {
-      let meshKey = relativeDir;
-      if (relativeDir === 'back') meshKey = null; // No back sensor mesh
+    // 6. Visual Update
+    if (!isInternal) {
+      // console.log(`🔎 SCAN [${relativeDir}]: Origin(${x},${z}) -> Target(${fx},${fz}) = ${result}`);
 
-      if (meshKey && this.state.sensorMeshes[meshKey]) {
+      let meshKey = relativeDir;
+
+      if (this.state.sensorMeshes && this.state.sensorMeshes[meshKey]) {
         const mesh = this.state.sensorMeshes[meshKey];
         if (this.state.gridToWorld) {
           const wp = this.state.gridToWorld(fx, fz);
-          mesh.position.set(wp.x, 0.25, wp.z); // Raised to 0.25
+
+          // Fix: Ensure Y is physically above floor (0) and below Rover (0.2)
+          mesh.position.set(wp.x, 0.05, wp.z);
+
+          // Color Logic
+          if (mesh.material) {
+            if (result === 'OBSTACLE') mesh.material.color.setHex(0xFF0000); // Red
+            else if (result === 'MINERAL') mesh.material.color.setHex(0xFFD700); // Gold
+            else mesh.material.color.setHex(0x00FFFF); // Cyan (Clear)
+          }
+
           mesh.visible = true;
-          setTimeout(() => { mesh.visible = false; }, 300);
+          // Clear previous timeout if exists to prevent flickering (optional polish)
+          if (mesh.userData.timeout) clearTimeout(mesh.userData.timeout);
+          mesh.userData.timeout = setTimeout(() => { mesh.visible = false; }, 500);
         }
       }
     }
 
-    // LOGIC CHECK (Force Number)
-    if (fx < 0 || fx >= this.state.gridSize || fz < 0 || fz >= this.state.gridSize) return { [relativeDir]: "OBSTACLE" };
-    if (this.state.mapData.obstacles.some(o => Math.round(o.x) === fx && Math.round(o.z) === fz)) return { [relativeDir]: "OBSTACLE" };
-    if (this.state.mapData.minerals.some(m => Math.round(m.x) === fx && Math.round(m.z) === fz)) return { [relativeDir]: "MINERAL" };
-
-    return { [relativeDir]: "CLEAR" };
+    return { [relativeDir]: result };
   },
 
   runPhysicsTests() {

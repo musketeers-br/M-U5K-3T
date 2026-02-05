@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Simulation } from './simulation.js';
 
 // --- VERSÃO DE DEBUG ---
-console.log("🔹 FRONTEND BUILD: v4.2 - " + new Date().toISOString());
+console.log("🔹 FRONTEND BUILD: v4.3 - " + new Date().toISOString());
 console.log("🔹 TRANSPILER BUILD: v4.1 - " + new Date().toISOString());
 console.log("🔹 API TARGET: /mu5k3t/api");
 
@@ -77,11 +77,17 @@ const resetEnvironment = () => {
   console.log("🧹 Cleaning up environment...");
   const toRemove = [];
   scene.traverse((child) => {
-    if (child.userData &&
-      (child.userData.type === 'OBSTACLE' ||
-        child.userData.type === 'MINERAL' ||
-        child.userData.type === 'ROVER' ||
-        child.userData.type === 'DECORATION')) {
+    // 1. Safe extraction of type (default to null if missing)
+    const type = (child.userData && child.userData.type) ? child.userData.type : null;
+
+    // 2. Check strictly against known types
+    if (type && (
+      type === 'OBSTACLE' ||
+      type === 'MINERAL' ||
+      type === 'ROVER' ||
+      type === 'DECORATION' ||
+      type.startsWith('SENSOR') // Now safe because type is guaranteed to be a truthy string
+    )) {
       toRemove.push(child);
     }
   });
@@ -287,14 +293,14 @@ async function initEnvironment(mode, missionId) {
 
     // Sensor 1: Front (Yellow)
     const frontMat = new THREE.MeshBasicMaterial({
-      color: 0xFFFF00,
+      color: 0xFFEA00, // Safety Yellow for High Visibility
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.85,
       side: THREE.DoubleSide,
-      depthTest: false
+      depthTest: true
     });
     sensorMeshes.front = new THREE.Mesh(sensorGeo, frontMat);
-    sensorMeshes.front.renderOrder = 999;
+    sensorMeshes.front.renderOrder = 1;
     sensorMeshes.front.rotation.x = -Math.PI / 2;
     sensorMeshes.front.position.y = 0.05;
     sensorMeshes.front.visible = false;
@@ -307,10 +313,10 @@ async function initEnvironment(mode, missionId) {
       transparent: true,
       opacity: 0.6,
       side: THREE.DoubleSide,
-      depthTest: false
+      depthTest: true
     });
     sensorMeshes.far = new THREE.Mesh(sensorGeo, farMat);
-    sensorMeshes.far.renderOrder = 999;
+    sensorMeshes.far.renderOrder = 1;
     sensorMeshes.far.rotation.x = -Math.PI / 2;
     sensorMeshes.far.position.y = 0.05;
     sensorMeshes.far.visible = false;
@@ -323,10 +329,10 @@ async function initEnvironment(mode, missionId) {
       transparent: true,
       opacity: 0.7,
       side: THREE.DoubleSide,
-      depthTest: false
+      depthTest: true
     });
     sensorMeshes.left = new THREE.Mesh(sensorGeo, leftMat);
-    sensorMeshes.left.renderOrder = 999;
+    sensorMeshes.left.renderOrder = 1;
     sensorMeshes.left.rotation.x = -Math.PI / 2;
     sensorMeshes.left.position.y = 0.05;
     sensorMeshes.left.visible = false;
@@ -334,8 +340,8 @@ async function initEnvironment(mode, missionId) {
     scene.add(sensorMeshes.left);
 
     // Sensor 4: Right (Cyan)
-    sensorMeshes.right = new THREE.Mesh(sensorGeo, leftMat); // Uses same cyan material
-    sensorMeshes.right.renderOrder = 999;
+    sensorMeshes.right = new THREE.Mesh(sensorGeo, leftMat.clone()); // CLONE MATERIAL
+    sensorMeshes.right.renderOrder = 1;
     sensorMeshes.right.rotation.x = -Math.PI / 2;
     sensorMeshes.right.position.y = 0.05;
     sensorMeshes.right.visible = false;
