@@ -3,7 +3,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Simulation } from './simulation.js';
 
 // --- VERSÃO DE DEBUG ---
-console.log("🔹 FRONTEND BUILD: v3.7 - " + new Date().toISOString());
+console.log("🔹 FRONTEND BUILD: v4.2 - " + new Date().toISOString());
+console.log("🔹 TRANSPILER BUILD: v4.1 - " + new Date().toISOString());
 console.log("🔹 API TARGET: /mu5k3t/api");
 
 // --- CONFIGURAÇÃO GLOBAL ---
@@ -88,22 +89,36 @@ const resetEnvironment = () => {
 };
 
 // Busca dados do mapa no Backend
+// Busca dados do mapa no Backend (HARDCODED FOR SYNC FIX)
+// Busca dados do mapa no Backend (PRODUCTION MODE)
 const fetchMapData = async (missionId, mode) => {
-  const safeMode = mode === 'deploy' ? 'DEPLOY' : 'SIMULATION';
-  // Caminho relativo para API
-  const url = `${API_BASE_URL}/map/${missionId}/${safeMode}`;
-  console.log(`📡 Fetching Map: ${url}`);
+  console.log(`📡 ESTABLISHING UPLINK: Fetching ${missionId} (${mode})...`);
 
-  const res = await fetch(url);
-  const type = res.headers.get("content-type");
+  try {
+    const safeMode = mode === 'deploy' ? 'DEPLOY' : 'SIMULATION';
+    const res = await fetch(`${API_BASE_URL}/map/${missionId}/${safeMode}`);
+    if (!res.ok) throw new Error(`Map Uplink Failed: ${res.statusText}`);
 
-  // Validação contra erro de Proxy/HTML
-  if (type && type.includes("text/html")) {
-    throw new Error("Backend Error: Received HTML instead of JSON. Check API Path.");
+    const data = await res.json();
+
+    // 🛡️ DATA INTEGRITY CHECK (Unit Test Pattern)
+    if (!data.gridSize) console.warn("⚠️ Map missing gridSize, defaulting to 25.");
+    if (!Array.isArray(data.minerals)) data.minerals = [];
+    if (!Array.isArray(data.obstacles)) data.obstacles = [];
+
+    // Force Types to guarantee Physics Engine compatibility (Twin World prevention)
+    if (data.minerals) data.minerals.forEach(m => { m.x = Number(m.x); m.z = Number(m.z); });
+    if (data.obstacles) data.obstacles.forEach(o => { o.x = Number(o.x); o.z = Number(o.z); });
+    if (data.roverStart) { data.roverStart.x = Number(data.roverStart.x); data.roverStart.z = Number(data.roverStart.z); }
+
+    console.log(`✅ MAP DATA SECURED. Minerals: ${data.minerals.length}, Obstacles: ${data.obstacles.length}`);
+    return data;
+
+  } catch (error) {
+    console.error("❌ UPLINK SEVERED:", error);
+    // Explicitly fail to prevent silent sync errors
+    throw error;
   }
-  if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
-
-  return await res.json();
 };
 
 // ==========================================
@@ -235,7 +250,7 @@ async function initEnvironment(mode, missionId) {
         // Convert logical grid coordinates to world coordinates
         const pos = gridToWorld(obs.x, obs.z);
         block.position.set(pos.x, 0.5, pos.z);
-        block.userData = { type: 'OBSTACLE' };
+        block.userData = { type: 'OBSTACLE', x: obs.x, z: obs.z };
 
         // Add Neon Edges for style
         const edges = new THREE.EdgesGeometry(geo);
@@ -261,7 +276,7 @@ async function initEnvironment(mode, missionId) {
         // Convert logical grid coordinates to world coordinates
         const pos = gridToWorld(min.x, min.z);
         crystal.position.set(pos.x, 0.6, pos.z); // Slightly floating
-        crystal.userData = { type: 'MINERAL', value: min.value };
+        crystal.userData = { type: 'MINERAL', value: min.value, x: min.x, z: min.z };
         scene.add(crystal);
       });
     }
@@ -274,12 +289,14 @@ async function initEnvironment(mode, missionId) {
     const frontMat = new THREE.MeshBasicMaterial({
       color: 0xFFFF00,
       transparent: true,
-      opacity: 0.5,
-      side: THREE.DoubleSide
+      opacity: 0.7,
+      side: THREE.DoubleSide,
+      depthTest: false
     });
     sensorMeshes.front = new THREE.Mesh(sensorGeo, frontMat);
+    sensorMeshes.front.renderOrder = 999;
     sensorMeshes.front.rotation.x = -Math.PI / 2;
-    sensorMeshes.front.position.y = 0.02;
+    sensorMeshes.front.position.y = 0.05;
     sensorMeshes.front.visible = false;
     sensorMeshes.front.userData = { type: 'SENSOR_FRONT' };
     scene.add(sensorMeshes.front);
@@ -288,12 +305,14 @@ async function initEnvironment(mode, missionId) {
     const farMat = new THREE.MeshBasicMaterial({
       color: 0xFFA500,
       transparent: true,
-      opacity: 0.4,
-      side: THREE.DoubleSide
+      opacity: 0.6,
+      side: THREE.DoubleSide,
+      depthTest: false
     });
     sensorMeshes.far = new THREE.Mesh(sensorGeo, farMat);
+    sensorMeshes.far.renderOrder = 999;
     sensorMeshes.far.rotation.x = -Math.PI / 2;
-    sensorMeshes.far.position.y = 0.015;
+    sensorMeshes.far.position.y = 0.05;
     sensorMeshes.far.visible = false;
     sensorMeshes.far.userData = { type: 'SENSOR_FAR' };
     scene.add(sensorMeshes.far);
@@ -302,20 +321,23 @@ async function initEnvironment(mode, missionId) {
     const leftMat = new THREE.MeshBasicMaterial({
       color: 0x00FFFF,
       transparent: true,
-      opacity: 0.5,
-      side: THREE.DoubleSide
+      opacity: 0.7,
+      side: THREE.DoubleSide,
+      depthTest: false
     });
     sensorMeshes.left = new THREE.Mesh(sensorGeo, leftMat);
+    sensorMeshes.left.renderOrder = 999;
     sensorMeshes.left.rotation.x = -Math.PI / 2;
-    sensorMeshes.left.position.y = 0.025;
+    sensorMeshes.left.position.y = 0.05;
     sensorMeshes.left.visible = false;
     sensorMeshes.left.userData = { type: 'SENSOR_LEFT' };
     scene.add(sensorMeshes.left);
 
     // Sensor 4: Right (Cyan)
     sensorMeshes.right = new THREE.Mesh(sensorGeo, leftMat); // Uses same cyan material
+    sensorMeshes.right.renderOrder = 999;
     sensorMeshes.right.rotation.x = -Math.PI / 2;
-    sensorMeshes.right.position.y = 0.025;
+    sensorMeshes.right.position.y = 0.05;
     sensorMeshes.right.visible = false;
     sensorMeshes.right.userData = { type: 'SENSOR_RIGHT' };
     scene.add(sensorMeshes.right);

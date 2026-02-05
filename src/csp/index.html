@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="./vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Three.js Starter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+  <script type="module" crossorigin src="./assets/index.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index.css">
+</head>
+
+<body>
+  <div id="loader" class="loader">
+    <div class="loader-content">LOADING ASSETS...</div>
+  </div>
+
+  <!-- Landing View -->
+  <div id="landing-view" class="view cinematic-view">
+    <div class="cinematic-content">
+      <h1 class="glitch-text">M-U5K-3T // ORBITAL UPLINK</h1>
+      <p class="mission-statement">
+        Command a remote rover using InterSystems ObjectScript.<br />
+        Your mission: Extract minerals from hostile exoplanets.<br />
+        Optimize your code for high-latency bandwidth, manage fuel efficiency,<br />
+        and climb the global leaderboard.
+      </p>
+      <div class="login-form">
+        <input type="text" id="username-input" placeholder="Enter your dc profile username" autocomplete="off"
+          aria-describedby="username-help" />
+        <small id="username-help" class="form-text text-muted">
+          Find it in your profile URL: community.intersystems.com/user/<strong>your-username</strong>
+        </small>
+        <button id="initialize-uplink-btn" class="btn blue large">INITIALIZE UPLINK</button>
+      </div>
+      <div id="landing-status" class="login-status hidden"></div>
+    </div>
+  </div>
+
+  <!-- Tutorial View -->
+  <div id="tutorial-view" class="view terminal-theme hidden">
+    <div class="crt-overlay"></div>
+    <div class="tutorial-card">
+      <div id="typewriter-target" class="console-output"></div>
+
+      <!-- Raw slides data (used by typewriter) -->
+      <div id="tutorial-slides-data" class="hidden">
+        <!-- Slide 1: Welcome to M‑U5K‑3T -->
+        <div class="tutorial-step">
+          <h3>Welcome to M-U5K-3T</h3>
+          <p>Congratulations, Rover Commander. You've been assigned to M-U5K-3T, an exoplanet orbiting a hyperactive red
+            dwarf star.
+            Good news: it's rich in exotic minerals.
+            Bad news: the surface is bathed in radiation, swept by
+            corrosive dust storms, and officially classified as "not recommended, even for humans."</p>
+          <p>Humans can't set foot there without becoming a geological statistic. That's where you and your rover come
+            in.
+          </p>
+        </div>
+
+        <!-- Slide 2: The High-Latency Link -->
+        <div class="tutorial-step">
+          <h3>The High-Latency Problem</h3>
+          <p>M-U5K-3T is <em>very</em> far away. So far that by the time you say "turn left,"
+            your rover has already driven off a cliff.
+            Direct control is physically impossible.</p>
+          <p>Instead, you must <b>program the rover's autonomous logic</b>
+            using InterSystems ObjectScript and transmit it in advance.
+            Shorter code travels faster through the deep-space link, so yes, code golf actually matters out here.</p>
+        </div>
+
+        <!-- Slide 3: Your Mission -->
+        <div class="tutorial-step">
+          <h3>Core Objectives</h3>
+          <p>Your job is simple: collect valuable minerals, avoid obstacles that want to wreck you,
+            and survive hazardous atmospheric zones.
+            Some missions require you to <b>return to the landing base at (0,0)</b>
+            before your fuel runs dry.</p>
+          <p>The Musketeer Corps motto applies:
+            <em>"One for all, all for the commit that actually works."</em>
+          </p>
+        </div>
+
+        <!-- Slide 4: Flight Modes -->
+        <div class="tutorial-step">
+          <h3>Flight Modes</h3>
+          <p><b>SIMULATION (Danger Room):</b> Test your code in a safe holographic environment. Fast iteration, no
+            consequences. Think of it as the "undo button" you wish real space had.</p>
+          <p><b>DEPLOY (Orbit):</b> Send your code to the actual rover on M-U5K-3T and watch the mission unfold in real
+            terrain. No safety net. Your score counts here.</p>
+        </div>
+
+        <!-- Slide 5: Sensors & Survival -->
+        <div class="tutorial-step">
+          <h3>Sensors & Survival</h3>
+          <p>Your rover has directional sensors: <b>front</b>, <b>front_far</b>, <b>left</b>, <b>right</b>, and
+            <b>under</b>. Use them to detect obstacles, minerals, recharge zones, and the base.
+          </p>
+          <p>Fuel depletes with every move. HP drops if you collide. Reach 0 in either, and the mission ends—badly. Plan
+            your route. Write clean code. Don't be a statistic.</p>
+        </div>
+
+        <!-- Slide 6: Ready to Deploy -->
+        <div class="tutorial-step">
+          <h3>Ready, Commander?</h3>
+          <p>The Musketeer Corps is counting on you to prove that autonomous rovers can extract resources from one of
+            the
+            most hostile worlds we've ever surveyed.</p>
+          <p>Remember:
+            <em>Good news, the minerals are abundant.
+              Bad news, everything else is trying to kill you.</em>
+          </p>
+          <p class="highlight">Welcome to the frontier. Code smart, survive long.</p>
+        </div>
+      </div>
+
+      <div class="tutorial-controls">
+        <button id="tutorial-prev-btn" class="btn">[ P ] PREV </button>
+        <button id="tutorial-next-btn" class="btn">[ N ] NEXT </button>
+        <div id="enter-control-btn" class="hidden">
+          <input type="checkbox" id="skip-tutorial-check"> <label>Skip next time</label>
+          <button class="btn">[ I ] INITIALIZE CONTROL LINK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mission Hub -->
+  <div id="mission-hub" class="view cinematic-view hidden">
+    <div class="hub-header">
+      <h1>OPERATIONAL DASHBOARD</h1>
+      <div id="user-stats-pill" class="stats-pill">
+        <span id="display-username">PILOT</span> | <span id="total-score">Score: 0</span> | <span id="pilot-rank">Rank:
+          Cadet</span>
+      </div>
+    </div>
+    <div id="mission-list" class="mission-grid">
+      <!-- Dynamic Mission Cards go here -->
+    </div>
+    <div class="hub-footer">
+      <button id="logout-btn" class="btn red small">LOGOUT</button>
+    </div>
+  </div>
+
+  <!-- Game View -->
+  <div id="game-view" class="view hidden">
+    <button id="back-to-hub-btn" class="btn-back">&lt;&lt; BACK TO DASHBOARD</button>
+
+    <div id="hud" class="hud">
+      <div class="hud-stat fuel">
+        <span class="label">Fuel</span>
+        <span id="fuel-display" class="value">100</span>
+      </div>
+      <div class="hud-stat health">
+        <span class="label">HP</span>
+        <span id="hp-display" class="value">100</span>
+      </div>
+      <div class="hud-stat score">
+        <span class="label">Score</span>
+        <span id="score-display" class="value">0</span>
+      </div>
+      <div class="hud-stat steps">
+        <span class="label">Steps</span>
+        <span id="steps-display" class="value">0</span>
+      </div>
+      <div class="hud-stat status">
+        <span id="status-display" class="value" style="color:#4a9eff">READY</span>
+      </div>
+      <span id="toxic-warning" class="toxic-warning hidden">TOXIC WARNING</span>
+    </div>
+
+    <div id="terminal" class="terminal">
+      <button id="toggle-terminal" class="toggle-btn">&gt;</button>
+      <div class="terminal-header">
+        MISSION CONTROL
+        <button id="btn-export" title="Download Code"
+          style="background:none; border:none; color:white; cursor:pointer; font-size: 14px; opacity: 0.7; transition: opacity 0.2s;">[EXP]</button>
+      </div>
+      <textarea id="code-editor" spellcheck="false">
+ClassMethod OnTick(context As %DynamicObject)
+{
+    Set rover = context.%Get("rover")
+    Set memory = context.%Get("memory")
+    Set step = memory.%Get("step")
+    If step = "" { Set step = 0 }
+    
+    // Mission Pattern: 5 moves per side
+    // Tip: The mission runs until Fuel runs out or HP hits 0.
+    If step < 5 {
+        Do context.%Set("output", {"action": "MOVE", "param": "north"})
+    } ElseIf step = 5 {
+        Do context.%Set("output", {"action": "TURN", "param": "east"})
+    } ElseIf step < 11 {
+        Do context.%Set("output", {"action": "MOVE", "param": "east"})
+    } ElseIf step = 11 {
+        Do context.%Set("output", {"action": "TURN", "param": "south"})
+    } ElseIf step < 17 {
+        Do context.%Set("output", {"action": "MOVE", "param": "south"})
+    } ElseIf step = 17 {
+        Do context.%Set("output", {"action": "TURN", "param": "west"})
+    } ElseIf step < 23 {
+        Do context.%Set("output", {"action": "MOVE", "param": "west"})
+    } ElseIf step = 23 {
+        Do context.%Set("output", {"action": "TURN", "param": "north"})
+    }
+    
+    Do memory.%Set("step", step + 1)
+}
+        </textarea>
+      <div id="mission-info" class="mission-info">
+
+        <div id="mission-briefing" class="mission-briefing highlight">
+          Uplink Active...
+        </div>
+      </div>
+      <div class="controls">
+        <button id="execute-test-btn" class="btn blue">EXECUTE TEST</button>
+        <button id="reset-btn" class="btn red">RESET</button>
+        <button id="deploy-orbit-btn" class="btn orange">DEPLOY TO ORBIT</button>
+      </div>
+      <div id="logs" class="logs">
+        <div class="log-entry system">System initialized.</div>
+      </div>
+    </div>
+
+    <div id="transmission-overlay" class="transmission-overlay hidden">
+      <div class="transmission-content">
+        <div class="pulse-light"></div>
+        <p>Transmitting to M-USK-3T...</p>
+      </div>
+    </div>
+
+    <div id="game-over-screen" class="game-over-overlay hidden">
+      <div class="game-over-content">
+        <div class="game-over-title">MISSION FAILED</div>
+        <div id="game-over-reason" class="game-over-reason"></div>
+        <button id="retry-btn" class="btn red large">REBOOT ROVER</button>
+      </div>
+    </div>
+
+    <div id="victory-screen" class="victory-overlay hidden">
+      <div class="victory-content">
+        <div class="victory-title">MISSION ACCOMPLISHED</div>
+        <div class="victory-stats">
+          <div>Minerals: <span id="v-minerals">0</span></div>
+          <div>Fuel Left: <span id="v-fuel">0</span></div>
+          <div>Efficiency: <span id="v-efficiency">0%</span></div>
+        </div>
+        <button id="v-continue-btn" class="btn gold large">ACKNOWLEDGE</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+
+</html>
