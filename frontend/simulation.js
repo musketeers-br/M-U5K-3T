@@ -528,9 +528,30 @@ export const Simulation = {
           await userFunction(contextWrapper, roverApi, lib, memoryWrapper);
 
           this.state.steps++;
-          const out = rawContextData.output;
-          if (out && out.action !== "WAIT") { if (out.action === "MOVE") await this.moveRover(); if (out.action === "TURN") await this.turnRover(out.param); out.action = "WAIT"; }
-          if (this.state.updateHUD) this.state.updateHUD({ fuel: this.state.fuel, health: this.state.health, score: this.state.score, steps: this.state.steps, status: `STEP ${this.state.steps}` });
+
+          // API V2: State-Based Action System
+          const action = rawContextData.action;
+
+          if (action) {
+            // 1. Turn
+            if (action.turn) {
+              await this.turnRover(action.turn);
+            }
+            // 2. Move
+            if (action.move) { // Ignores value, just trigger
+              await this.moveRover();
+            }
+            // 3. Rotate & Move (Advanced)
+            if (action.rotate_and_move) {
+              await this.turnRover(action.rotate_and_move);
+              await this.moveRover();
+            }
+
+            // Cleanup to prevent loop repeats
+            rawContextData.action = null;
+          }
+
+          if (this.state.updateHUD) this.state.updateHUD({ fuel: this.state.fuel, health: this.state.health, score: this.state.score, steps: this.state.steps, status: "ONLINE" });
         } catch (err) { console.error("Runtime Error:", err); this.stop(); }
       };
       await executeStep();
@@ -578,6 +599,8 @@ export const Simulation = {
 
     this.state.memory.x = nx; this.state.memory.z = nz; this.state.fuel -= 1;
     if (this.state.rover) { const wp = this.state.gridToWorld(nx, nz); this.state.rover.position.set(wp.x, 0.2, wp.z); }
+
+    console.log("🚜 MOVE EXEC: Walking", dir, "to", nx, nz);
     return true;
   },
 
@@ -713,6 +736,20 @@ export const Simulation = {
     this.collectMineral();
     const collectPass = (this.state.score === 50 && this.state.mapData.minerals.length === 0);
     console.log(collectPass ? "✅ Physics Test 2 (Collect): PASS" : `❌ Physics Test 2 (Collect): FAIL Score=${this.state.score}`);
+
+    // Test Case 3: Rotate & Move (API V2)
+    this.state.memory = { x: 0, z: 0, direction: 'north' };
+    this.state.mapData = { gridSize: 10, obstacles: [], minerals: [] };
+    // Simulate "rotate_and_move: east"
+    // 1. Turn East
+    const r = { north: Math.PI, east: -Math.PI / 2, south: 0, west: Math.PI / 2 };
+    this.state.memory.direction = 'east';
+    this.state.rover.rotation.y = r['east'];
+    // 2. Move (East = x+1)
+    this.state.memory.x = 1;
+
+    const v2Pass = (this.state.memory.x === 1 && this.state.memory.direction === 'east');
+    console.log(v2Pass ? "✅ Physics Test 3 (Rotate & Move): PASS" : "❌ Physics Test 3 (Rotate & Move): FAIL");
 
     console.log("🧪 Physics Tests Complete.");
 

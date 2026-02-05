@@ -55,16 +55,16 @@
             Good news: it's rich in exotic minerals.
             Bad news: the surface is bathed in radiation, swept by
             corrosive dust storms, and officially classified as "not recommended, even for humans."</p>
-          <p>Humans can't set foot there without becoming a geological statistic. That's where you and your rover come
-            in.
+          <p>Humans can't set foot there without becoming a geological statistic.
+            That's where you and your rover come in.
           </p>
         </div>
 
         <!-- Slide 2: The High-Latency Link -->
         <div class="tutorial-step">
           <h3>The High-Latency Problem</h3>
-          <p>M-U5K-3T is <em>very</em> far away. So far that by the time you say "turn left,"
-            your rover has already driven off a cliff.
+          <p>M-U5K-3T is <em>very</em> far away. So far that by the time you say "turn left," your rover has already
+            driven off a cliff.
             Direct control is physically impossible.</p>
           <p>Instead, you must <b>program the rover's autonomous logic</b>
             using InterSystems ObjectScript and transmit it in advance.
@@ -106,8 +106,7 @@
         <div class="tutorial-step">
           <h3>Ready, Commander?</h3>
           <p>The Musketeer Corps is counting on you to prove that autonomous rovers can extract resources from one of
-            the
-            most hostile worlds we've ever surveyed.</p>
+            the most hostile worlds we've ever surveyed.</p>
           <p>Remember:
             <em>Good news, the minerals are abundant.
               Bad news, everything else is trying to kill you.</em>
@@ -185,27 +184,27 @@ ClassMethod OnTick(context As %DynamicObject)
     Set memory = context.%Get("memory")
     Set step = memory.%Get("step")
     If step = "" { Set step = 0 }
-    
-    // Mission Pattern: 5 moves per side
-    // Tip: The mission runs until Fuel runs out or HP hits 0.
+
+    // API V2: Action-Based Context
+    // Available Actions:
+    // 1. {"turn": "direction"}
+    // 2. {"move": ""}
+    // 3. {"rotate_and_move": "direction"} (Advanced)
+
     If step < 5 {
-        Do context.%Set("output", {"action": "MOVE", "param": "north"})
+         // Move Forward (North)
+         Do context.%Set("action", {"move": ""})
     } ElseIf step = 5 {
-        Do context.%Set("output", {"action": "TURN", "param": "east"})
+         // Turn East AND Move in one tick
+         Do context.%Set("action", {"rotate_and_move": "east"})
     } ElseIf step < 11 {
-        Do context.%Set("output", {"action": "MOVE", "param": "east"})
+         Do context.%Set("action", {"move": ""})
     } ElseIf step = 11 {
-        Do context.%Set("output", {"action": "TURN", "param": "south"})
+         Do context.%Set("action", {"rotate_and_move": "south"})
     } ElseIf step < 17 {
-        Do context.%Set("output", {"action": "MOVE", "param": "south"})
-    } ElseIf step = 17 {
-        Do context.%Set("output", {"action": "TURN", "param": "west"})
-    } ElseIf step < 23 {
-        Do context.%Set("output", {"action": "MOVE", "param": "west"})
-    } ElseIf step = 23 {
-        Do context.%Set("output", {"action": "TURN", "param": "north"})
+         Do context.%Set("action", {"move": ""})
     }
-    
+
     Do memory.%Set("step", step + 1)
 }
         </textarea>
