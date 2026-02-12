@@ -794,7 +794,7 @@ export const Simulation = {
     this.state.score = oldScore;
   },
 
-  async runReplay(timeline, serverMapData) {
+  async runReplay(timeline, serverMapData, onStepMapUpdate) {
     if (!this.state.rover) { console.error("Rover not initialized!"); return; }
 
     console.log(`📼 REPLAY STARTED: ${timeline.length} frames`);
@@ -828,6 +828,11 @@ export const Simulation = {
 
       const step = timeline[frameIndex];
       const state = step.roverState;
+
+      // EXTERNAL RENDERER HOOK
+      if (onStepMapUpdate) {
+        onStepMapUpdate(step);
+      }
 
       // 2. Update Rover Visuals
       if (this.state.rover) {

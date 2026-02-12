@@ -15,12 +15,12 @@
     "nodes" : [
         {
             "mesh" : 0,
-            "name" : "rocks_B"
+            "name" : "Rock_1_G_Color1"
         }
     ],
     "materials" : [
         {
-            "name" : "spacebits_texture",
+            "name" : "forest",
             "pbrMetallicRoughness" : {
                 "baseColorTexture" : {
                     "index" : 0
@@ -32,7 +32,7 @@
     ],
     "meshes" : [
         {
-            "name" : "Cylinder.2732",
+            "name" : "Rock_1_G_Color1",
             "primitives" : [
                 {
                     "attributes" : {
@@ -55,69 +55,69 @@
     "images" : [
         {
             "mimeType" : "image/png",
-            "name" : "spacebits_texture",
-            "uri" : "spacebits_texture.png"
+            "name" : "forest_texture",
+            "uri" : "forest_texture.png"
         }
     ],
     "accessors" : [
         {
             "bufferView" : 0,
             "componentType" : 5126,
-            "count" : 243,
+            "count" : 135,
             "max" : [
-                0.9314445853233337,
-                1.067021131515503,
-                0.8625953793525696
+                0.6002156734466553,
+                1.8677520751953125,
+                0.9238189458847046
             ],
             "min" : [
-                -0.9496017694473267,
-                -1.2698579666903242e-05,
-                -0.8758621215820312
+                -1.144816279411316,
+                0,
+                -0.7264999151229858
             ],
             "type" : "VEC3"
         },
         {
             "bufferView" : 1,
             "componentType" : 5126,
-            "count" : 243,
+            "count" : 135,
             "type" : "VEC2"
         },
         {
             "bufferView" : 2,
             "componentType" : 5126,
-            "count" : 243,
+            "count" : 135,
             "type" : "VEC3"
         },
         {
             "bufferView" : 3,
             "componentType" : 5123,
-            "count" : 480,
+            "count" : 312,
             "type" : "SCALAR"
         }
     ],
     "bufferViews" : [
         {
             "buffer" : 0,
-            "byteLength" : 2916,
+            "byteLength" : 1620,
             "byteOffset" : 0,
             "target" : 34962
         },
         {
             "buffer" : 0,
-            "byteLength" : 1944,
-            "byteOffset" : 2916,
+            "byteLength" : 1080,
+            "byteOffset" : 1620,
             "target" : 34962
         },
         {
             "buffer" : 0,
-            "byteLength" : 2916,
-            "byteOffset" : 4860,
+            "byteLength" : 1620,
+            "byteOffset" : 2700,
             "target" : 34962
         },
         {
             "buffer" : 0,
-            "byteLength" : 960,
-            "byteOffset" : 7776,
+            "byteLength" : 624,
+            "byteOffset" : 4320,
             "target" : 34963
         }
     ],
@@ -129,8 +129,8 @@
     ],
     "buffers" : [
         {
-            "byteLength" : 8736,
-            "uri" : "rocks_B.bin"
+            "byteLength" : 4944,
+            "uri" : "Rock_1_G_Color1.bin"
         }
     ]
 }

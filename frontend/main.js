@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Simulation } from './simulation.js';
+import { MissionRenderer } from './MissionRenderer.js';
 
 // --- VERSÃO DE DEBUG ---
-console.log("🔹 FRONTEND BUILD: v4.3 - " + new Date().toISOString());
+console.log("🔹 FRONTEND BUILD: v4.4 - " + new Date().toISOString());
 console.log("🔹 TRANSPILER BUILD: v4.1 - " + new Date().toISOString());
 console.log("🔹 API TARGET: /mu5k3t/api");
 
@@ -441,7 +442,13 @@ window.loadMission = (id, mode) => {
 const switchView = (viewId) => {
   document.querySelectorAll('.view').forEach(el => el.classList.add('hidden'));
   const target = document.getElementById(viewId);
-  if (target) target.classList.remove('hidden');
+  if (target) {
+    target.classList.remove('hidden');
+    // If switching to mission-view, ensure renderer resizes
+    if (viewId === 'mission-view' && window.missionRenderer) {
+      setTimeout(() => window.missionRenderer.resize(), 100);
+    }
+  }
 };
 
 const updateHUD = (data) => {
@@ -835,9 +842,25 @@ if (deployBtn) {
         })
       });
 
-      const data = await response.json();
+      const rawText = await response.text();
+      console.log("🔥 DEBUG - RAW BACKEND RESPONSE:", rawText);
+
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (e) {
+        throw new Error("Invalid JSON from server: " + rawText.substring(0, 50));
+      }
 
       // 4. Handle Response
+      if (['COMPILE_ERROR', 'RUNTIME_ERROR', 'SECURITY_VIOLATION'].includes(data.status)) {
+        const msg = `❌ ${data.status}: ${data.message || data.error || 'Unknown Error'}`;
+        console.error(msg);
+        alert(msg);
+        if (transmissionOverlay) transmissionOverlay.classList.add('hidden');
+        return;
+      }
+
       if (!response.ok || data.error) {
         throw new Error(data.error || "Transmission rejected by satellite.");
       }
@@ -854,7 +877,37 @@ if (deployBtn) {
         // Start Replay
         // Ensure we have the map data used by the server (data.mapUsed)
         if (data.timeline && data.mapUsed) {
-          Simulation.runReplay(data.timeline, data.mapUsed);
+
+          // 1. SWAP VIEWS (Explicit Visibility Protocol)
+          document.querySelectorAll('.view').forEach(el => el.classList.add('hidden'));
+          const missionView = document.getElementById('mission-view');
+          if (missionView) {
+            missionView.classList.remove('hidden');
+            missionView.style.display = 'block'; // Force display
+          }
+
+          // 2. INIT RENDERER (Singleton)
+          if (!window.missionRenderer) {
+            window.missionRenderer = new MissionRenderer('mission-view');
+          }
+          window.missionRenderer.resize(); // Garante tamanho
+          window.missionRenderer.loadMap(data.mapUsed);
+
+    Simulation.runReplay(data.timeline, data.mapUsed, (step) => {
+      const state = step.roverState;
+      
+      if (window.missionRenderer && state) {
+          // PROTEÇÃO: Se direction vier undefined, usa 'north' para não quebrar o toLowerCase()
+          const safeDirection = state.direction || 'north';
+          
+          window.missionRenderer.updateRover(state.x, state.z, safeDirection);
+
+          if (step.event === 'COLLECT') {
+              window.missionRenderer.hideMineral(state.x, state.z);
+          }
+      }
+    });
+
         } else {
           alert("Error: Missing replay data from server.");
         }
