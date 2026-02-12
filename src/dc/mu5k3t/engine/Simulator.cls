@@ -37,8 +37,7 @@ Method RunMission(pMissionCode As %String, pUserCode As %String, pUser As %Strin
     Set ..MineralsCollected = 0
     Set ..Memory = {}
     
-    // 3. Compile (Sandbox)
-    // O silêncio é garantido pelo Dispatch agora.
+    // 3. Compile (Silent Sandbox)
     Set tSC = ##class(dc.mu5k3t.engine.Sandbox).CompileUserCode(pUserCode, .userClass)
     If $$$ISERR(tSC) {
         Set response.status = "COMPILE_ERROR"
@@ -51,6 +50,7 @@ Method RunMission(pMissionCode As %String, pUserCode As %String, pUser As %Strin
     Set step = 0
     Set missionStatus = "RUNNING"
     
+    // LOOP ESTRITAMENTE SILENCIOSO - NENHUM WRITE PERMITIDO
     While (step < maxSteps) && (..Rover.fuel > 0) && (..Rover.hp > 0) && (missionStatus = "RUNNING") {
         Set step = step + 1
         
@@ -61,7 +61,6 @@ Method RunMission(pMissionCode As %String, pUserCode As %String, pUser As %Strin
         Set context.action = {} 
         
         // Execute User Code
-        // (Já estamos no dispositivo NULL, então Writes do usuário são seguros)
         Try {
             Do $ClassMethod(userClass, "OnTick", context)
         } Catch ex {
@@ -70,13 +69,13 @@ Method RunMission(pMissionCode As %String, pUserCode As %String, pUser As %Strin
             Quit 
         }
         
-        // Physics & Logic
+        // Physics
         Set actionLog = ..ProcessAction(context.action)
         Set actionLog.step = step
         Set actionLog.roverState = {}.%FromJSON(..Rover.%ToJSON()) 
         Do ..Timeline.%Push(actionLog)
         
-        // Victory Condition: 5 Minerals + Base
+        // Victory Condition
         If (..MineralsCollected >= 5) && (..Rover.x = 0) && (..Rover.z = 0) { 
             Set missionStatus = "VICTORY" 
         }
@@ -85,10 +84,11 @@ Method RunMission(pMissionCode As %String, pUserCode As %String, pUser As %Strin
     // Cleanup
     Do ##class(dc.mu5k3t.engine.Sandbox).Cleanup(userClass)
     
-    // Final Status Logic
+    // Final Status
     If missionStatus = "RUNNING" { Set missionStatus = "FUEL_DEPLETED" }
     If ..Rover.hp <= 0 { Set missionStatus = "HULL_BREACH" }
     
+    // Response
     Set response.status = missionStatus
     Set response.timeline = ..Timeline
     Set response.finalScore = ..Rover.score
@@ -103,7 +103,6 @@ Method RunMission(pMissionCode As %String, pUserCode As %String, pUser As %Strin
     Return response
 }
 
-/// Real Raycasting: Checks the server-side map for obstacles
 Method ScanSensors() As %DynamicObject
 {
     Set sensors = {}
@@ -117,32 +116,26 @@ Method ScanSensors() As %DynamicObject
     Return sensors
 }
 
-/// Helper: Returns Tile Type (CLEAR, OBSTACLE, MINERAL)
 Method CheckTile(coords As %DynamicObject) As %String
 {
     Set x = coords.x, z = coords.z
-    // Walls
     If (x < 0) || (z < 0) || (x >= ..GridSize) || (z >= ..GridSize) Return "OBSTACLE"
     
-    // Obstacles
     Set iter = ..MapData.obstacles.%GetIterator()
     While iter.%GetNext(.k, .o) { If (o.x=x)&&(o.z=z) Return "OBSTACLE" }
     
-    // Minerals
     Set iter = ..MapData.minerals.%GetIterator()
     While iter.%GetNext(.k, .m) { If (m.x=x)&&(m.z=z) Return "MINERAL" }
     
     Return "CLEAR"
 }
 
-/// Helper: Calculates Target Coordinates based on Direction
 Method GetRelCoords(x, z, facing, relDir, steps) As %DynamicObject
 {
     Set facing = $ZCVT(facing,"L"), relDir = $ZCVT(relDir,"L")
     Set dirs = $ListBuild("north", "east", "south", "west")
     Set idx = $ListFind(dirs, facing)
     
-    // Rotation Math: Front=0, Right=+1, Back=+2, Left=+3
     Set off = 0
     If relDir="right" { Set off=1 }
     ElseIf relDir="back" { Set off=2 }
@@ -176,7 +169,7 @@ Method ProcessAction(action As %DynamicObject) As %DynamicObject
     If action.%IsDefined("move") || action.%IsDefined("rotate_and_move") {
         Set dir = ..Rover.direction
         If action.%IsDefined("rotate_and_move") {
-            Set dir = $ZCVT(action.rotate_and_move, "L")
+            Set dir = $ZCVT(action."rotate_and_move", "L")
             Set ..Rover.direction = dir
             Set result.action = "ROTATE_MOVE"
         } Else {
@@ -193,8 +186,8 @@ Method ProcessAction(action As %DynamicObject) As %DynamicObject
             Set ..Rover.x = t.x, ..Rover.z = t.z
             If check = "MINERAL" {
                 Set iter = ..MapData.minerals.%GetIterator()
-                While iter.%GetNext(.k, .m) {
-                    If (m.x=t.x)&&(m.z=t.z) {
+                While iter.%GetNext(.k, .min) {
+                    If (min.x = t.x) && (min.z = t.z) {
                         Do ..MapData.minerals.%Remove(k)
                         Set ..MineralsCollected = ..MineralsCollected+1
                         Set ..Rover.score = ..Rover.score+50

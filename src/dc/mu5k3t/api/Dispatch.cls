@@ -85,7 +85,7 @@ ClassMethod ReceiveDeploy() As %Status
     Set tSC = $$$OK
     
     Try {
-        // 1. READ PAYLOAD SAFELY 🛡️
+        // 1. READ PAYLOAD SAFELY
         Set payloadString = ""
         If $IsObject(%request.Content) && (%request.Content.Size > 0) {
             Do %request.Content.Rewind() 
@@ -93,43 +93,45 @@ ClassMethod ReceiveDeploy() As %Status
             Set payloadString = $ZCVT(rawData, "I", "UTF8")
         }
         
-        If payloadString = "" {
-            Throw $$$ERROR(5002, "Empty Request Body")
-        }
+        If payloadString = "" Throw $$$ERROR(5002, "Empty Request Body")
         
-        // 2. Generate Ticket
+        // 2. Queue Worker
         Set ticketID = $System.Util.CreateGUID()
-        
-        // 3. Queue Worker
         Set mgr = ##class(%SYSTEM.WorkMgr).%New()
-        // Passamos a string limpa. O Worker não saberá que %request existe.
         Set tSC = mgr.Queue("##class(dc.mu5k3t.model.Player).MissionDeployWorker", payloadString, ticketID)
         $$$ThrowOnError(tSC)
         
-        // 4. Wait
+        // 3. Wait
         Set tSC = mgr.WaitForComplete()
         $$$ThrowOnError(tSC)
         
-        // 5. RETRIEVE FROM BUFFER CLASS
-        // Aqui é onde pegamos o retorno. Não usamos %response dentro do worker.
+        // 4. RETRIEVE FROM BUFFER CLASS
         Set jsonResult = ""
         Set errorMsg = ""
         Set tSCBuffer = ##class(dc.mu5k3t.storage.WorkBuffer).ReadAndDestroy(ticketID, .jsonResult, .errorMsg)
         
         If $$$ISERR(tSCBuffer) Throw tSCBuffer
         
-        // 6. Check for Worker Errors
+        Do %response.Reset()
+        Set %response.CharSet = "utf-8"
+        Set %response.ContentType = ..#CONTENTTYPE
+        // -----------------------------------
+
         If errorMsg'="" {
             Set err = {}
             Set err.status = "WORKER_ERROR"
             Set err.message = errorMsg
             Write err.%ToJSON()
         } Else {
-            // SUCESSO! Escrevemos o JSON recuperado no %response do Pai
             Write jsonResult
         }
         
     } Catch ex {
+        // Limpeza de emergência também no Catch
+        Do %response.Reset()
+        Set %response.CharSet = "utf-8"
+        Set %response.ContentType = ..#CONTENTTYPE
+        
         Set tSC=ex.AsStatus()
         Set err = {}
         Set err.status = "SERVER_ERROR"
