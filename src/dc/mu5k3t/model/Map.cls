@@ -6,17 +6,29 @@ ClassMethod GetMap(mission As %String, mode As %String, Output map As %DynamicOb
 {
     Set tSC = $$$OK
     Try {
-            
-        // 1. Fetch the Map Definition from Storage
         Set config = ##class(dc.mu5k3t.storage.MapDefinition).ConfigIdxOpen(mission, mode)
         
         If '$IsObject(config) {
-            // Fallback default if not configured
-            Return $$$ERROR(5002,"Map configuration not found for " _ mission _ " / " _ mode)
+            Set config = ##class(dc.mu5k3t.storage.MapDefinition).%New()
+            Set config.MissionCode = mission
+            Set config.Mode = mode
+            
+            // Default Definitions based on Mission ID
+            If (mission = "M1") {
+                Set config.GridSize = 25
+                Set config.Algorithm = "OPEN_FIELD"
+            } ElseIf (mission = "M2") {
+                Set config.GridSize = 30
+                Set config.Algorithm = "CORRIDOR"
+            } Else {
+                // Generic Fallback
+                Set config.GridSize = 25
+                Set config.Algorithm = "OPEN_FIELD"
+            }
         }
 
-        // 2. Generate the JSON Procedurally based on Config
         Set map = ..GenerateMapJSON(config)
+        
     } Catch ex {
         Set tSC=ex.AsStatus()
     }
@@ -32,6 +44,7 @@ ClassMethod GenerateMapJSON(config As dc.mu5k3t.storage.MapDefinition) As %Dynam
         Set map = {}
         Set map.gridSize = size
         Set map.baseStation = { "x": 0, "z": 0 }
+        Set map.roverStart = { "x": 0, "z": 0 } // Explicit start position
         Set map.config = { "tileSize": 1.2, "gap": 0.1 }
         
         Set map.obstacles = []
@@ -89,7 +102,7 @@ ClassMethod AddRandomItem(list As %DynamicArray, size As %Integer, value As %Int
         Set x = $Random(size)
         Set z = $Random(size)
         
-        // Don't block the base
+        // Don't block the base (0,0)
         If (x=0) && (z=0) Quit 
         
         Set item = { "x": (x), "z": (z) }

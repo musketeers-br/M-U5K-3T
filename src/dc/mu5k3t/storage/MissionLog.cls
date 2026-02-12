@@ -8,15 +8,7 @@ Relationship Player As dc.mu5k3t.storage.Player [ Cardinality = parent, Inverse 
 /// This is NOT a parent relationship, just a link.
 Relationship Mission As dc.mu5k3t.storage.Mission [ Cardinality = one, Inverse = Logs ];
 
-Property Timestamp As %TimeStamp [ InitialExpression = {$ZDATETIME($H, 3)} ];
-
-// --- Code Data ---
-
 Property SourceCode As %Stream.GlobalCharacter;
-
-Property CodeSize As %Integer;
-
-// --- Simulation Metrics ---
 
 Property MineralsCollected As %Integer;
 
@@ -26,45 +18,79 @@ Property HpLost As %Integer;
 
 Property Success As %Boolean;
 
-/// Final Calculated Score
-Property TotalScore As %Numeric(SCALE = 2);
+Property TotalScore As %Integer;
 
-/// Index needed to find logs by Mission (since it's a relationship)
-Index MissionIdx On Mission;
+Property LogDate As %TimeStamp [ InitialExpression = {$ZDateTime($Horolog, 3)} ];
 
-/// Index for Leaderboard: Grouped by Mission, Ordered by Score
-Index LeaderboardIdx On (Mission, TotalScore);
-
-Method CalculateScore()
+/// Records the official result of a Deploy execution
+ClassMethod RecordLog(pUsername As %String, pMissionCode As %String, pSourceCode As %String, pStats As %DynamicObject) As %Status
 {
-        If '..Success { Set ..TotalScore = 0 Quit }
-        
-        Set score = (..MineralsCollected * 100)
-        Set score = score - (..FuelUsed * 1.5) - (..HpLost * 5)
-        
-        Set codeBonus = 500 - ..CodeSize
-        If codeBonus < 0 { Set codeBonus = 0 }
-        
-        Set ..TotalScore = score + codeBonus
+        Set tSC = $$$OK
+        Try {
+                // 1. Get Player
+                Set player = ##class(dc.mu5k3t.storage.Player).GetOrCreate(pUsername)
+                
+                // 2. Get Mission
+                Set mission = ##class(dc.mu5k3t.storage.Mission).CodeIndexOpen(pMissionCode)
+                // If mission doesn't exist in DB yet (fresh install), create it gracefully or skip
+                If '$IsObject(mission) {
+                // For MVP robustness, we create a stub mission if missing
+                Set mission = ##class(dc.mu5k3t.storage.Mission).%New()
+                Set mission.Code = pMissionCode
+                Set mission.Name = "Unknown Mission"
+                Do mission.%Save()
+                }
+                
+                // 3. Create Log
+                Set log = ..%New()
+                Set log.Player = player
+                Set log.Mission = mission
+                
+                // 4. Fill Stats
+                Set log.MineralsCollected = +pStats.minerals
+                Set log.FuelUsed = +pStats.fuelUsed
+                Set log.HpLost = +pStats.hpLost
+                Set log.Success = +pStats.success
+                
+                // 5. Save Source Code
+                Do log.SourceCode.Write(pSourceCode)
+                
+                // 6. Calculate Score (Simple Formula)
+                // Base 1000 + (Minerals * 100) - (Fuel * 2) - (HP Lost * 5)
+                Set baseScore = 0
+                If log.Success Set baseScore = 1000
+                
+                Set score = baseScore + (log.MineralsCollected * 100) - (log.FuelUsed * 2) - (log.HpLost * 5)
+                If score < 0 Set score = 0
+                Set log.TotalScore = score
+                
+                $$$ThrowOnError(log.%Save())
+                
+        } Catch ex {
+                Set tSC = ex.AsStatus()
+        }
+        Return tSC
 }
 
-Query GetHighScore(player As %String, mission As %String) As %SQLQuery(COMPILEMODE = "IMMEDIATE", ROWSPEC = "highScore:%String", SELECTMODE = "RUNTIME") [ SqlProc ]
+/// Helper Query for Leaderboard
+Query GetHighScore(pPlayerId As %String, pMissionId As %String) As %SQLQuery [ SqlProc ]
 {
-        SELECT MAX(TotalScore) as highScore 
+        SELECT MAX(TotalScore) As highScore 
         FROM dc_mu5k3t_storage.MissionLog 
-        WHERE Player = :player
-        AND Mission = :mission 
-        AND Success = 1
+        WHERE Player = :pPlayerId AND Mission = :pMissionId AND Success = 1
 }
 
-Query GetGlobalRanking(mission As %String, score As %String) As %SQLQuery(COMPILEMODE = "IMMEDIATE", ROWSPEC = "Rank:%Integer", SELECTMODE = "RUNTIME") [ SqlProc ]
+/// Helper Query for Global Ranking
+Query GetGlobalRanking(pMissionId As %String, pScore As %Integer) As %SQLQuery [ SqlProc ]
 {
-        SELECT COUNT(*) + 1 As Rank FROM (
-                SELECT Player, MAX(TotalScore) as MaxScore
-                FROM dc_mu5k3t_storage.MissionLog
-                WHERE Mission = :mission AND Success = 1
+        SELECT COUNT(*) + 1 As Rank
+        FROM (
+                SELECT MAX(TotalScore) as max_score 
+                FROM dc_mu5k3t_storage.MissionLog 
+                WHERE Mission = :pMissionId 
                 GROUP BY Player
-        ) WHERE MaxScore > :score
+        ) 
+        WHERE max_score > :pScore
 }
 
 Storage Default
@@ -77,28 +103,25 @@ Storage Default
 <Value>Mission</Value>
 </Value>
 <Value name="3">
-<Value>Timestamp</Value>
-</Value>
-<Value name="4">
 <Value>SourceCode</Value>
 </Value>
-<Value name="5">
-<Value>CodeSize</Value>
-</Value>
-<Value name="6">
+<Value name="4">
 <Value>MineralsCollected</Value>
 </Value>
-<Value name="7">
+<Value name="5">
 <Value>FuelUsed</Value>
 </Value>
-<Value name="8">
+<Value name="6">
 <Value>HpLost</Value>
 </Value>
-<Value name="9">
+<Value name="7">
 <Value>Success</Value>
 </Value>
-<Value name="10">
+<Value name="8">
 <Value>TotalScore</Value>
+</Value>
+<Value name="9">
+<Value>LogDate</Value>
 </Value>
 </Data>
 <DataLocation>{%%PARENT}("MissionLogs")</DataLocation>

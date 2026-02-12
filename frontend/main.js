@@ -228,12 +228,12 @@ async function initEnvironment(mode, missionId) {
       type: 'ROVER',
       originalColor: 0xffffff,
       flashDamage: function () {
+        const original = this.originalColor || 0xffffff;
         roverMesh.traverse((child) => {
           if (child.isMesh && child.material) {
-            const oldColor = child.material.color.getHex();
             child.material.color.setHex(0xff0000); // Flash Red
             setTimeout(() => {
-              child.material.color.setHex(0xffffff); // Restore to white
+              child.material.color.setHex(original); // Restore
             }, 200);
           }
         });
@@ -504,6 +504,13 @@ const renderDashboard = async () => {
     const data = await res.json();
 
     missionList.innerHTML = ''; // Limpa loader
+
+    // DEFENSIVE CHECK
+    if (!data.missions || !Array.isArray(data.missions)) {
+      console.warn("Dashboard: No missions data received.", data);
+      missionList.innerHTML = '<div class="error-msg">NO MISSION DATA RECEIVED</div>';
+      return;
+    }
 
     data.missions.forEach(mission => {
       const card = document.createElement('div');
@@ -792,6 +799,87 @@ if (execBtn) execBtn.onclick = () => {
   const userCode = codeEditor ? codeEditor.value : '';
   Simulation.runCode(userCode);
 };
+
+// ==========================================
+// 🚀 DEPLOY BUTTON LOGIC
+// ==========================================
+const deployBtn = document.getElementById('deploy-orbit-btn');
+const transmissionOverlay = document.getElementById('transmission-overlay');
+
+if (deployBtn) {
+  deployBtn.addEventListener('click', async () => {
+    // 1. Validation
+    const code = document.getElementById('code-editor').value;
+    if (!code.trim()) { alert("Cannot deploy empty code!"); return; }
+    if (!gameState.user) { alert("Pilot identity unknown. Please re-login."); return; }
+
+    // 2. Show Overlay
+    if (transmissionOverlay) {
+      transmissionOverlay.classList.remove('hidden');
+      // Reset animation or text if needed
+      const p = transmissionOverlay.querySelector('p');
+      if (p) p.innerText = "Transmitting to M-USK-3T...";
+    }
+
+    try {
+      console.log(`📡 UPLINKING CODE FOR ${gameState.user} ON ${gameState.currentMission || 'M1'}`);
+
+      // 3. API Call
+      const response = await fetch(`${API_BASE_URL}/deploy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: gameState.user,
+          missionId: gameState.currentMission || 'M1',
+          code: code
+        })
+      });
+
+      const data = await response.json();
+
+      // 4. Handle Response
+      if (!response.ok || data.error) {
+        throw new Error(data.error || "Transmission rejected by satellite.");
+      }
+
+      console.log("✅ DEPLOY SUCCESS. REPLAYING TIMELINE...", data);
+
+      // Hide Overlay after a brief delay for effect
+      setTimeout(() => {
+        if (transmissionOverlay) transmissionOverlay.classList.add('hidden');
+
+        // Switch Mode to DEPLOY (if not already)
+        gameState.mode = 'DEPLOY';
+
+        // Start Replay
+        // Ensure we have the map data used by the server (data.mapUsed)
+        if (data.timeline && data.mapUsed) {
+          Simulation.runReplay(data.timeline, data.mapUsed);
+        } else {
+          alert("Error: Missing replay data from server.");
+        }
+
+      }, 1500);
+
+    } catch (e) {
+      console.error("❌ DEPLOY ERROR:", e);
+      if (transmissionOverlay) {
+        const p = transmissionOverlay.querySelector('p');
+        if (p) {
+          p.innerText = "TRANSMISSION FAILED.";
+          p.style.color = "red";
+        }
+        setTimeout(() => {
+          transmissionOverlay.classList.add('hidden');
+          alert(`DEPLOY FAILED: ${e.message}`);
+          // Penalize? (Optional)
+        }, 2000);
+      } else {
+        alert(`DEPLOY FAILED: ${e.message}`);
+      }
+    }
+  });
+}
 
 // ==========================================
 // 🔄 ANIMATION LOOP

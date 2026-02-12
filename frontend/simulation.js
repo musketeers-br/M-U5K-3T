@@ -794,6 +794,88 @@ export const Simulation = {
     this.state.score = oldScore;
   },
 
+  async runReplay(timeline, serverMapData) {
+    if (!this.state.rover) { console.error("Rover not initialized!"); return; }
+
+    console.log(`📼 REPLAY STARTED: ${timeline.length} frames`);
+    this.stop(); // Stop any running simulation
+    this.state.running = true;
+
+    // 1. Sync Map Visuals with Server Data
+    // We trust the server map data for the replay
+    this.state.mapData = serverMapData;
+
+    // Reset visuals if needed (optional, depends on how strictly we want to match initial state)
+    // For now, we assume the scene is already set up for this mission.
+
+    let frameIndex = 0;
+
+    this.state.interval = setInterval(() => {
+      if (!this.state.running) { clearInterval(this.state.interval); return; }
+      if (frameIndex >= timeline.length) {
+        console.log("📼 REPLAY FINISHED");
+        this.stop();
+        // Trigger Victory/Game Over based on last frame
+        const lastFrame = timeline[timeline.length - 1];
+        if (this.state.updateHUD) {
+          // Check specific flags from server if available, or infer from state
+          if (lastFrame.roverState.health <= 0) {
+            // Game Over handled by HUD update
+          }
+        }
+        return;
+      }
+
+      const step = timeline[frameIndex];
+      const state = step.roverState;
+
+      // 2. Update Rover Visuals
+      if (this.state.rover) {
+        // Position
+        const wp = this.state.gridToWorld(state.x, state.z);
+        this.state.rover.position.set(wp.x, 0.2, wp.z);
+
+        // Rotation
+        const r = { north: Math.PI, east: -Math.PI / 2, south: 0, west: Math.PI / 2 };
+        this.state.rover.rotation.y = r[state.direction] || 0;
+
+        // Visual Damage
+        if (step.event === 'COLLISION' || step.event === 'OBSTACLE') {
+          if (this.state.rover.userData.flashDamage) this.state.rover.userData.flashDamage();
+        }
+      }
+
+      // 3. Update HUD
+      if (this.state.updateHUD) {
+        this.state.updateHUD({
+          fuel: state.fuel,
+          health: state.health,
+          score: state.score,
+          steps: frameIndex + 1,
+          status: "REPLAYING"
+        });
+      }
+
+      // 4. Handle World Events (Visuals Only)
+      if (step.event === 'COLLECT') {
+        // Find mineral at this location and hide it
+        if (this.state.scene) {
+          this.state.scene.traverse((child) => {
+            if (child.userData && child.userData.type === 'MINERAL' &&
+              Math.round(child.userData.x) === Math.round(state.x) &&
+              Math.round(child.userData.z) === Math.round(state.z) &&
+              child.visible) {
+              child.visible = false;
+              console.log("💎 REPLAY: Visual mineral collected at", state.x, state.z);
+            }
+          });
+        }
+      }
+
+      frameIndex++;
+    }, 250); // Fast replay speed (4 fps)
+  },
+
   async runTests() {
     console.log("🧪 Running v4.7 Transpiler Tests...");
     const tests = [

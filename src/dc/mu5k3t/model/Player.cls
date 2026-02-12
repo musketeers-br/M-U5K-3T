@@ -11,6 +11,8 @@ ClassMethod Login(user As %String, Output gamer As %DynamicObject) As %Status
             $$$ThrowOnError(..ReturnSuccess(player, .gamer))
             Return $$$OK
         }
+
+        // Verifica se usuário existe na DC (Developer Community)
         Set req = ##class(%Net.HttpRequest).%New()
         Set req.Server = "community.intersystems.com"
         Set req.SSLConfiguration = "ISC.FeatureTracker.SSL.Config" 
@@ -29,7 +31,6 @@ ClassMethod Login(user As %String, Output gamer As %DynamicObject) As %Status
     Return tSC
 }
 
-/// Helper para retornar o objeto JSON do jogador
 ClassMethod ReturnSuccess(player As dc.mu5k3t.storage.Player, Output output As %DynamicObject = "") As %Status
 {
     Set tSC = $$$OK
@@ -60,22 +61,27 @@ ClassMethod Dashboard(user As %String, Output dashboard As %DynamicObject) As %S
             "joinDate": (player.JoinDate),
             "missions": []
         }
+        
         Set isPreviousMissionDone = 1 
-
         Set statement = ##class(%SQL.Statement).%New()
         $$$ThrowOnError(statement.%PrepareClassQuery("dc.mu5k3t.storage.Mission", "GetAllMissions"))
+        
         Set resultset = statement.%Execute()
+        
         While resultset.%Next() {
-            Set mId = resultset.%Get("ID"), mCode = resultset.%Get("Code")
-            Set completed = 0, rank = "-"
+            Set mId = resultset.%Get("ID")
+            Set mCode = resultset.%Get("Code")
+            
+            Set completed = 0, rank = "-", highScore = 0
+            
             $$$ThrowOnError(..GetHighScore(player.%Id(), mId, .highScore))
-            Set highScore = +highScore
-            If (highScore > 0) Set completed = 1
-            If (completed) {
+            Set highScore = +highScore 
+            
+            If (highScore > 0) {
+                Set completed = 1
                 $$$ThrowOnError(..GetGlobalRanking(mId, highScore, .rank))
             }
             Set status = "LOCKED"
-            
             If (isPreviousMissionDone) {
                 Set status = "OPEN"
                 If completed Set status = "COMPLETED"
@@ -91,6 +97,8 @@ ClassMethod Dashboard(user As %String, Output dashboard As %DynamicObject) As %S
             }
             
             Do dashboard.missions.%Push(missionObj)
+            
+            // Atualiza flag para a próxima iteração
             Set isPreviousMissionDone = completed
         }
     } Catch ex {
@@ -102,28 +110,138 @@ ClassMethod Dashboard(user As %String, Output dashboard As %DynamicObject) As %S
 ClassMethod GetHighScore(playerId As %String, missionId As %String, Output highScore As %Integer = 0) As %Status
 {
     Set tSC = $$$OK
+    Set highScore = 0
     Try {
         Set statement = ##class(%SQL.Statement).%New()
         $$$ThrowOnError(statement.%PrepareClassQuery("dc.mu5k3t.storage.MissionLog", "GetHighScore"))
         Set rs = statement.%Execute(playerId, missionId)
-        If rs.%Next() Set highScore = +rs.%Get("highScore")
+        If rs.%Next() {
+            Set highScore = +rs.%Get("highScore")
+        }
     } Catch ex {
         Set tSC=ex.AsStatus()
     }
     Return tSC
 }
 
-ClassMethod GetGlobalRanking(missionId As %String, highScore As %String, Output rank As %String = "") As %Status
+ClassMethod GetGlobalRanking(missionId As %String, highScore As %Integer, Output rank As %String = "") As %Status
 {
     Set tSC = $$$OK
+    Set rank = "-"
     Try {
-        Set rank = ""
         Set statement = ##class(%SQL.Statement).%New()
         $$$ThrowOnError(statement.%PrepareClassQuery("dc.mu5k3t.storage.MissionLog", "GetGlobalRanking"))
         Set rs = statement.%Execute(missionId, highScore)
-        If rs.%Next() Set rank = "#"_rs.%Get("Rank")
+        If rs.%Next() {
+            Set rank = "#" _ rs.%Get("Rank")
+        }
     } Catch ex {
         Set tSC=ex.AsStatus()
+    }
+    Return tSC
+}
+
+ClassMethod ValidateUserCode(pCode As %String) As %String [ Language = python ]
+{
+    import re
+    import json
+    
+    response = {}
+    valid = True
+    reason = ""
+
+    # 1. Globals (permitir apenas ^||)
+    if re.search(r'\^(?!\|\|)', pCode):
+        valid = False
+        reason = "SECURITY ALERT: Acesso a Globais Persistentes é proibido. Utilize globais temporárias (^||Name)."
+
+    # 2. System class
+    if valid and re.search(r'##class', pCode, re.IGNORECASE):
+        valid = False
+        reason = "SECURITY ALERT: Instanciação direta de classes (##class) é proibida."
+        
+    # Block: $System, $ZF, Job, Halt, Xecute, $Job
+    dangerous_pattern = r'(\$System|\$ZF|\$Job|\bJob\b|\bHalt\b|\bXecute\b)'
+    if valid and re.search(dangerous_pattern, pCode, re.IGNORECASE):
+        valid = False
+        reason = "SECURITY ALERT: Comandos de Sistema ($System, Job, Halt) detectados."
+        
+    if valid and re.search(r'\$\$[\w\^]+', pCode):
+        valid = False
+        reason = "SECURITY ALERT: Chamadas diretas de rotina são proibidas."
+
+    response["valid"] = 1 if valid else 0
+    response["reason"] = reason
+    return json.dumps(response)
+}
+
+/// Core logic: Simulator execution and persistence
+ClassMethod MissionDeploy(payload As %DynamicObject, Output response As %DynamicObject) As %Status
+{
+    Set tSC = $$$OK
+    Try {
+        Set user = payload.username
+        Set missionCode = payload.missionId
+        Set code = payload.code
+        
+        // 1. Launch Simulator
+        Set simulator = ##class(dc.mu5k3t.engine.Simulator).%New()
+        Set response = simulator.RunMission(missionCode, code, user)
+        
+        // 2. Persist Result
+        If (response.status = "VICTORY") || (response.status = "FUEL_DEPLETED") || (response.status = "HULL_BREACH") {
+            Set tSCLog = ##class(dc.mu5k3t.storage.MissionLog).RecordLog(
+                user, 
+                missionCode, 
+                code, 
+                response.stats
+            )
+            If $$$ISERR(tSCLog) {
+                Set response.logError = $System.Status.GetErrorText(tSCLog)
+            }
+        }
+        
+    } Catch ex {
+        Set tSC=ex.AsStatus()
+    }
+
+    Return tSC
+}
+
+/// Worker Entry Point: Runs in a separate process.
+/// Any 'Write' here goes to the system log, NOT the HTTP response.
+/// Worker Entry Point: Runs in background process.
+ClassMethod MissionDeployWorker(pPayloadStr As %String, pTicketID As %String) As %Status
+{
+    Set tSC = $$$OK
+    Try {
+        // 1. Rehydrate Payload (String -> Object)
+        Set payload = {}.%FromJSON(pPayloadStr)
+        
+        // 2. Validate Code
+        Set security = ..ValidateUserCode(payload.code)
+        Set security = {}.%FromJSON(security)
+        If security.valid = 0 {
+            Set response = {}
+            Set response.status = "SECURITY_VIOLATION"
+            Set response.message = security.reason
+            
+            Do ##class(dc.mu5k3t.storage.WorkBuffer).WriteResult(pTicketID, response.%ToJSON())
+            Return $$$OK
+        }
+
+        // 3. Run Logic (Player -> Simulator)
+        Set tSCLogic = ..MissionDeploy(payload, .responseObj)
+        If $$$ISERR(tSCLogic) {
+            Set errText = $System.Status.GetErrorText(tSCLogic)
+            Do ##class(dc.mu5k3t.storage.WorkBuffer).WriteResult(pTicketID, "", "ERROR", errText)
+            Return $$$OK
+        }
+        Do ##class(dc.mu5k3t.storage.WorkBuffer).WriteResult(pTicketID, responseObj.%ToJSON())
+    } Catch ex {
+        Set tSC = ex.AsStatus()
+        Set errText = $System.Status.GetErrorText(tSC)
+        Do ##class(dc.mu5k3t.storage.WorkBuffer).WriteResult(pTicketID, "", "CRASH", errText)
     }
     Return tSC
 }
