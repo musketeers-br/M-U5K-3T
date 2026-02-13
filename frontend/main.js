@@ -95,9 +95,6 @@ const resetEnvironment = () => {
   toRemove.forEach(child => scene.remove(child));
 };
 
-// Busca dados do mapa no Backend
-// Busca dados do mapa no Backend (HARDCODED FOR SYNC FIX)
-// Busca dados do mapa no Backend (PRODUCTION MODE)
 const fetchMapData = async (missionId, mode) => {
   console.log(`📡 ESTABLISHING UPLINK: Fetching ${missionId} (${mode})...`);
 
@@ -128,9 +125,6 @@ const fetchMapData = async (missionId, mode) => {
   }
 };
 
-// ==========================================
-// 🌍 CORE: INICIALIZAÇÃO DO AMBIENTE (LOADER)
-// ==========================================
 async function initEnvironment(mode, missionId) {
   // 1. Mostrar Loader
   if (loaderElement) loaderElement.classList.remove('hidden');
@@ -241,7 +235,7 @@ async function initEnvironment(mode, missionId) {
       }
     };
     scene.add(roverMesh);
-    gameState.rover = roverMesh; // Salva ref para o simulador
+    gameState.rover = roverMesh; 
 
     // 8. OBSTACLES (Full Tile Blocks)
     if (mapData.obstacles) {
@@ -369,10 +363,6 @@ async function initEnvironment(mode, missionId) {
   }
 }
 
-// ==========================================
-// 🎮 CONTROLE DO JOGO
-// ==========================================
-
 // Cleanup function to properly reset simulation state
 const cleanupSimulation = () => {
   console.log("🧹 Cleaning up simulation...");
@@ -434,10 +424,6 @@ window.backToDashboard = () => {
 window.loadMission = (id, mode) => {
   initEnvironment(mode, id);
 };
-
-// ==========================================
-// 🖥️ UI & NAVEGAÇÃO
-// ==========================================
 
 const switchView = (viewId) => {
   document.querySelectorAll('.view').forEach(el => el.classList.add('hidden'));
@@ -596,9 +582,6 @@ const handleLogin = async () => {
   }
 };
 
-// ==========================================
-// 📖 LÓGICA DO TUTORIAL (Carrossel Terminal)
-// ==========================================
 const tutorialSlidesData = document.querySelectorAll('#tutorial-slides-data .tutorial-step');
 const tutorialConsole = document.getElementById('typewriter-target');
 const nextBtn = document.getElementById('tutorial-next-btn');
@@ -635,8 +618,6 @@ const typeWriter = (element, html, speed = 15) => {
       }
 
       const node = nodes[nodeIndex];
-      // REMOVED: replace('<span class="cursor"></span>', '') - simplified cursor management
-
       const playSound = () => {
         // [PLACEHOLDER] keystroke sound
         // console.log("🔊 TICK"); 
