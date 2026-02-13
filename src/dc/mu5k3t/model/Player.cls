@@ -73,14 +73,19 @@ ClassMethod Dashboard(user As %String, Output dashboard As %DynamicObject) As %S
             Set mCode = resultset.%Get("Code")
             
             Set completed = 0, rank = "-", highScore = 0
+            Set attempted = 0
             
-            $$$ThrowOnError(..GetHighScore(player.%Id(), mId, .highScore))
+            $$$ThrowOnError(..CheckMissionStatus(player.%Id(), mId, .highScore, .attempted))
+            
             Set highScore = +highScore 
             
-            If (highScore > 0) {
+            If (attempted) {
                 Set completed = 1
-                $$$ThrowOnError(..GetGlobalRanking(mId, highScore, .rank))
+                If (highScore > 0) {
+                    $$$ThrowOnError(..GetGlobalRanking(mId, highScore, .rank))
+                }
             }
+            
             Set status = "LOCKED"
             If (isPreviousMissionDone) {
                 Set status = "OPEN"
@@ -98,9 +103,35 @@ ClassMethod Dashboard(user As %String, Output dashboard As %DynamicObject) As %S
             
             Do dashboard.missions.%Push(missionObj)
             
-            // Atualiza flag para a próxima iteração
             Set isPreviousMissionDone = completed
         }
+    } Catch ex {
+        Set tSC=ex.AsStatus()
+    }
+    Return tSC
+}
+
+ClassMethod CheckMissionStatus(playerId As %String, missionId As %String, Output highScore As %Integer, Output attempted As %Boolean) As %Status
+{
+    Set tSC = $$$OK
+    Set highScore = 0
+    Set attempted = 0
+    Try {
+        Set statement = ##class(%SQL.Statement).%New()
+        $$$ThrowOnError(statement.%PrepareClassQuery("dc.mu5k3t.storage.MissionLog", "GetHighScore"))
+        Set rs = statement.%Execute(playerId, missionId)
+        If rs.%Next() {
+            Set highScore = +rs.%Get("highScore")
+        }
+        
+        Set sql = "SELECT TOP 1 ID FROM dc_mu5k3t_storage.MissionLog WHERE Player = ? AND Mission = ?"
+        Set stmt = ##class(%SQL.Statement).%New()
+        $$$ThrowOnError(stmt.%Prepare(sql))
+        Set rs2 = stmt.%Execute(playerId, missionId)
+        If rs2.%Next() {
+            Set attempted = 1
+        }
+        
     } Catch ex {
         Set tSC=ex.AsStatus()
     }
