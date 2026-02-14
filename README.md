@@ -3,7 +3,7 @@
 [![InterSystems IRIS](https://img.shields.io/badge/InterSystems-IRIS-blue.svg)](https://www.intersystems.com/)
 [![Three.js](https://img.shields.io/badge/Three.js-WebGL-white.svg)](https://threejs.org/)
 
-![M-U5K-3T Banner](./banner.png)
+![M-U5K-3T Banner](./assets/banner.png)
 
 # 🚀 M-U5K-3T
 
@@ -24,6 +24,16 @@ It is a gamified simulation platform that challenges developers to write **auton
 - ✅ **Simulate safely:** Test in the "Danger Room" (Client-side Simulation) with instant feedback.
 - ✅ **Deploy to Orbit:** Upload your code to the server to run on the actual map (Server-side Execution).
 - ✅ **Visual Feedback:** Watch your rover explore, mine, and survive in high-fidelity 3D.
+
+---
+
+## 🎥 Gameplay Demo
+
+Watch the **Twin World Engine** in action — syncing local simulation logic with server-side ObjectScript execution:
+
+[![M-U5K-3T Gameplay](./assets/cover.png)](https://youtu.be/SiS8Z4jwXWc)
+
+> *Click to watch the full mission replay.*
 
 ---
 
@@ -190,9 +200,12 @@ m-u5k-3t/
 
 `M-U5K-3T` is developed with 💜 by the **Musketeers Team**:
 
-* [José Roberto Pereira](https://community.intersystems.com/user/jos%C3%A9-roberto-pereira-0)
-* [Henry Pereira](https://community.intersystems.com/user/henry-pereira)
-* [Henrique Dias](https://community.intersystems.com/user/henrique-dias-2)
+- [José Roberto Pereira](https://community.intersystems.com/user/jos%C3%A9-roberto-pereira-0)
+- [Henry Pereira](https://community.intersystems.com/user/henry-pereira)
+- [Henrique Dias](https://community.intersystems.com/user/henrique-dias-2)
+
+
+![3Musketeers-br](./assets/3musketeers.png)
 
 ---
 
