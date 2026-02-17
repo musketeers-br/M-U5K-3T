@@ -3,7 +3,7 @@
   <Document name="dc-mu5k-3t.ZPM">
     <Module>
       <Name>dc-mu5k-3t</Name>
-      <Version>0.0.16</Version>
+      <Version>0.0.17</Version>
       <Description>M‑USK‑3T is a browser-based programming game where you write code to control an autonomous rover on a distant exoplanet rich in valuable minerals.</Description>
       <Packaging>module</Packaging>
       <SourcesRoot>src</SourcesRoot>
