@@ -14,6 +14,7 @@
         "internalPort": 52773
       },
       "links": {
+        "Game": "${serverUrl}/m5k3t/index.html",
         "UnitTest Portal": "${serverUrl}/csp/sys/%25UnitTest.Portal.Home.cls?$NAMESPACE=IRISAPP",
         "Error Log": "${serverUrl}/csp/sys/op/UtilSysAppErrorNamespaces.csp"
       }

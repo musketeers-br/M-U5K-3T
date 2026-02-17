@@ -27,8 +27,7 @@
         Url="/m5k3t"
         NameSpace="${namespace}"
         Description="M-U5K-3T Frontend"
-        Path="${cspdir}/csp/${namespace}"
-        
+        Path="${cspdir}${namespace}"
         ServeFiles="2"
         Recurse="1"
         ServeFilesTimeout="3600"
