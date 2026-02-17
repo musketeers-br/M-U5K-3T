@@ -9,6 +9,18 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+  <style>
+    /* Ajuste fino para o CodeMirror ocupar o espaço do textarea antigo */
+    .CodeMirror {
+      height: 100% !important;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 16px;
+      background-color: rgba(0, 0, 0, 0.3) !important;
+    }
+    .terminal textarea { display: none; } /* Esconde o textarea original */
+  </style>
   <script type="module" crossorigin src="./assets/index.js"></script>
   <link rel="stylesheet" crossorigin href="./assets/index.css">
 </head>
@@ -242,6 +254,10 @@ ClassMethod OnTick(ByRef context As %DynamicObject)
   </div>
   <div id="mission-view" class="view hidden"></div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/vb/vb.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
 </body>
 
 </html>

@@ -8,7 +8,6 @@ console.log("🔹 FRONTEND BUILD: v4.4 - " + new Date().toISOString());
 console.log("🔹 TRANSPILER BUILD: v4.1 - " + new Date().toISOString());
 console.log("🔹 API TARGET: /mu5k3t/api");
 
-// --- CONFIGURAÇÃO GLOBAL ---
 const API_BASE_URL = "/mu5k3t/api";
 
 const CONFIG = {
@@ -26,7 +25,6 @@ const CONFIG = {
   camera: { viewSize: 18, panSpeed: 2 }
 };
 
-// --- ESTADO DO JOGO ---
 const gameState = {
   user: localStorage.getItem('musk_username'),
   currentMission: null,
@@ -35,7 +33,6 @@ const gameState = {
   isRunning: false
 };
 
-// --- ELEMENTOS DOM (Seleção Segura) ---
 const loaderElement = document.getElementById('loader');
 const landingStatus = document.getElementById('landing-status');
 const usernameInput = document.getElementById('username-input');
@@ -69,11 +66,6 @@ dirLight.position.set(10, 20, 10);
 dirLight.castShadow = true;
 scene.add(dirLight);
 
-// ==========================================
-// 🛠️ FUNÇÕES AUXILIARES DE AMBIENTE
-// ==========================================
-
-// Limpa objetos antigos da cena
 const resetEnvironment = () => {
   console.log("🧹 Cleaning up environment...");
   const toRemove = [];
@@ -134,14 +126,11 @@ async function initEnvironment(mode, missionId) {
     gameState.mode = mode;
     gameState.currentMission = missionId;
 
-    // 2. Limpar Cena
     resetEnvironment();
 
-    // 3. Setup Loader com Caminho RELATIVO
     const loader = new GLTFLoader();
-    loader.setPath('assets/'); // Crucial para texturas funcionarem no CSP
+    loader.setPath('assets/'); 
 
-    // 4. Buscar Dados do Mapa + Assets 3D em Paralelo
     const [mapData, roverModel, landerModel] = await Promise.all([
       fetchMapData(missionId, mode),
       loader.loadAsync('dropship.gltf'),
@@ -343,8 +332,6 @@ async function initEnvironment(mode, missionId) {
     sensorMeshes.right.userData = { type: 'SENSOR_RIGHT' };
     scene.add(sensorMeshes.right);
 
-    // 11. Inicializa o Cérebro do Simulador
-    // Importante: Simulation.js precisa ter o método init() implementado
     if (Simulation.init) {
       Simulation.init(mapData, roverMesh, scene, updateHUD, sensorMeshes);
     } else {
@@ -737,10 +724,42 @@ if (finishBtnContainer) {
   };
 }
 
+let cmEditor = null;
 
 // ==========================================
 // 🔌 EVENT LISTENERS
 // ==========================================
+window.addEventListener('load', () => {
+  console.log("🚦 System Ready.");
+  if (loaderElement) loaderElement.classList.add('hidden');
+
+  // --- INIT CODEMIRROR ---
+  const textArea = document.getElementById('code-editor');
+  if (textArea) {
+    // @ts-ignore
+    cmEditor = CodeMirror.fromTextArea(textArea, {
+      mode: 'vb', // Visual Basic mode looks closest to ObjectScript
+      theme: 'dracula',
+      lineNumbers: true,
+      autoCloseBrackets: true,
+      styleActiveLine: true,
+      indentUnit: 4,
+      tabSize: 4,
+      indentWithTabs: false
+    });
+    
+    // Ajuste de altura para caber no container flex
+    cmEditor.setSize("100%", "100%"); 
+  }
+
+  if (gameState.user) {
+    switchView('mission-hub');
+    renderDashboard();
+  } else {
+    switchView('landing-view');
+  }
+});
+
 
 const initBtn = document.getElementById('initialize-uplink-btn');
 if (initBtn) initBtn.addEventListener('click', handleLogin);
@@ -769,7 +788,7 @@ if (termToggle && termEl) {
 const exportBtn = document.getElementById('btn-export');
 if (exportBtn) {
   exportBtn.onclick = () => {
-    const code = document.getElementById('code-editor').value;
+    const code = cmEditor ? cmEditor.getValue() : document.getElementById('code-editor').value;
     const blob = new Blob([code], { type: 'text/plain' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -783,9 +802,8 @@ if (retryBtn) retryBtn.onclick = window.resetGame;
 
 const execBtn = document.getElementById('execute-test-btn');
 if (execBtn) execBtn.onclick = () => {
-  const codeEditor = document.getElementById('code-editor');
-  const userCode = codeEditor ? codeEditor.value : '';
-  Simulation.runCode(userCode);
+  const code = cmEditor ? cmEditor.getValue() : document.getElementById('code-editor').value;
+  Simulation.runCode(code);
 };
 
 // ==========================================
@@ -797,7 +815,7 @@ const transmissionOverlay = document.getElementById('transmission-overlay');
 if (deployBtn) {
   deployBtn.addEventListener('click', async () => {
     // 1. Validation
-    const code = document.getElementById('code-editor').value;
+    const code = cmEditor ? cmEditor.getValue() : document.getElementById('code-editor').value;
     if (!code.trim()) { alert("Cannot deploy empty code!"); return; }
     if (!gameState.user) { alert("Pilot identity unknown. Please re-login."); return; }
 
