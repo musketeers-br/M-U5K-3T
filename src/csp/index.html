@@ -19,7 +19,20 @@
       font-size: 16px;
       background-color: rgba(0, 0, 0, 0.3) !important;
     }
-    .terminal textarea { display: none; } /* Esconde o textarea original */
+    .terminal textarea { display: none; } 
+    .terminal.expanded {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 99999 !important; 
+      max-width: none !important;
+      max-height: none !important;
+      border-radius: 0 !important;
+      padding: 20px !important;
+      box-sizing: border-box !important;
+    }
   </style>
   <script type="module" crossorigin src="./assets/index.js"></script>
   <link rel="stylesheet" crossorigin href="./assets/index.css">
@@ -178,6 +191,8 @@
       <button id="toggle-terminal" class="toggle-btn">&gt;</button>
       <div class="terminal-header">
         MISSION CONTROL
+        <button id="btn-expand" title="Toggle Fullscreen" 
+          style="background:none; border:none; color:white; cursor:pointer; margin-right: 10px;">[MAX]</button>
         <button id="btn-export" title="Download Code"
           style="background:none; border:none; color:white; cursor:pointer; font-size: 14px; opacity: 0.7; transition: opacity 0.2s;">[EXP]</button>
       </div>

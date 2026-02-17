@@ -797,6 +797,21 @@ if (exportBtn) {
   };
 }
 
+const expandBtn = document.getElementById('btn-expand');
+if (expandBtn) {
+  expandBtn.onclick = () => {
+    const term = document.getElementById('terminal');
+    term.classList.toggle('expanded');
+    
+    const isExpanded = term.classList.contains('expanded');
+    expandBtn.innerText = isExpanded ? '[MIN]' : '[MAX]';
+    
+    if (cmEditor) {
+        setTimeout(() => cmEditor.refresh(), 50);
+    }
+  };
+}
+
 const retryBtn = document.getElementById('retry-btn');
 if (retryBtn) retryBtn.onclick = window.resetGame;
 
